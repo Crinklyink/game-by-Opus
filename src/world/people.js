@@ -18,18 +18,131 @@ function part(geo, id, pivot, sw = 0, pivot2 = pivot) {
   geo = geo.index ? geo.toNonIndexed() : geo;
   for (const k of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(k)) geo.deleteAttribute(k);
   const n = geo.attributes.position.count;
-  geo.setAttribute('aPart', new THREE.Float32BufferAttribute(new Float32Array(n).fill(id), 1));
-  geo.setAttribute('aSw', new THREE.Float32BufferAttribute(new Float32Array(n).fill(sw), 1));
-  const pv = new Float32Array(n * 3), pv2 = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) { pv.set(pivot, i * 3); pv2.set(pivot2, i * 3); }
-  geo.setAttribute('aPivot', new THREE.Float32BufferAttribute(pv, 3));
-  geo.setAttribute('aPivot2', new THREE.Float32BufferAttribute(pv2, 3));
+  const ag = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) { ag[i * 4] = id; ag[i * 4 + 1] = sw; ag[i * 4 + 2] = sw; ag[i * 4 + 3] = 0; }
+  geo.setAttribute('aG', new THREE.Float32BufferAttribute(ag, 4));
   return geo;
 }
 // translate / rotate(YXZ) / scale a geometry (normals follow via applyMatrix4)
 const T = (g, p = [0, 0, 0], s = [1, 1, 1], r = [0, 0, 0]) => { g.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(...p), new THREE.Quaternion().setFromEuler(new THREE.Euler(r[0], r[1], r[2], 'YXZ')), new THREE.Vector3(...s))); return g; };
 const lathe = (pts, seg = 16) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg);
 const ball = (rad, seg = 12) => new THREE.SphereGeometry(rad, seg, Math.max(6, seg - 4));
+
+
+// ---------------------------------------------------------------------------------------------------
+// One continuous skin: smooth-union of anatomical primitives, meshed with surface nets. Every vertex carries its two
+// nearest skeleton segments + a blend weight, so knees, elbows, hips and shoulders bend smoothly (no gaps, no spheres).
+// ---------------------------------------------------------------------------------------------------
+function bodyGeometry() {
+  const v3 = (x, y, z) => [x, y, z];
+  const len = (a) => Math.hypot(a[0], a[1], a[2]);
+  const roundCone = (p, a, b, r1, r2) => {
+    const ba = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], pa = [p[0] - a[0], p[1] - a[1], p[2] - a[2]];
+    const l2 = ba[0] * ba[0] + ba[1] * ba[1] + ba[2] * ba[2], rr = r1 - r2, a2 = l2 - rr * rr, il2 = 1 / l2;
+    const y = pa[0] * ba[0] + pa[1] * ba[1] + pa[2] * ba[2], z = y - l2;
+    const q = [pa[0] * l2 - ba[0] * y, pa[1] * l2 - ba[1] * y, pa[2] * l2 - ba[2] * y];
+    const x2 = q[0] * q[0] + q[1] * q[1] + q[2] * q[2], y2 = y * y * l2, z2 = z * z * l2;
+    const k = Math.sign(rr) * rr * rr * x2;
+    if (Math.sign(z) * a2 * z2 > k) return Math.sqrt(x2 + z2) * il2 - r2;
+    if (Math.sign(y) * a2 * y2 < k) return Math.sqrt(x2 + y2) * il2 - r1;
+    return (Math.sqrt(x2 * a2 * il2) + y * rr) * il2 - r1;
+  };
+  const ell = (p, c, r) => { const q = [(p[0] - c[0]) / r[0], (p[1] - c[1]) / r[1], (p[2] - c[2]) / r[2]]; const k0 = len(q); const k1 = Math.hypot(q[0] / r[0], q[1] / r[1], q[2] / r[2]); return k1 < 1e-9 ? -Math.min(...r) : k0 * (k0 - 1) / k1; };
+  // group: 0 torso/head, 1/2 thigh L/R, 3/4 upper arm, 5/6 calf, 7/8 forearm.  part: colour category
+  const P = [];
+  const E = (g, part, c, r) => P.push({ g, part, f: (p) => ell(p, c, r) });
+  const C = (g, part, a, b, r1, r2) => P.push({ g, part, f: (p) => roundCone(p, a, b, r1, r2) });
+  E(0, 0, v3(0, 0.96, -0.005), v3(0.168, 0.108, 0.112));                 // pelvis (trouser colour)
+  for (const sg of [-1, 1]) {
+    const L = sg < 0;
+    E(0, 0, v3(sg * 0.07, 0.915, -0.06), v3(0.088, 0.095, 0.084));        // glutes
+    E(0, 2, v3(0, 1.1, 0), v3(0.15, 0.135, 0.105));                       // abdomen
+    E(0, 2, v3(sg * 0.075, 1.36, 0.058), v3(0.08, 0.06, 0.045));          // pectoral
+    E(0, 2, v3(sg * 0.205, 1.425, 0), v3(0.064, 0.052, 0.06));            // shoulder cap (deltoid)
+    C(0, 2, v3(0, 1.485, -0.005), v3(sg * 0.2, 1.43, 0), 0.05, 0.05);     // trapezius slope
+    E(0, 2, v3(sg * 0.06, 1.3, -0.055), v3(0.1, 0.12, 0.07));             // back
+    C(L ? 1 : 2, 0, v3(sg * 0.1, 0.94, 0), v3(sg * 0.094, 0.5, 0.004), 0.098, 0.062);   // thigh
+    E(L ? 1 : 2, 0, v3(sg * 0.095, 0.5, 0.03), v3(0.046, 0.05, 0.03));    // kneecap
+    E(L ? 1 : 2, 0, v3(sg * 0.1, 0.78, 0.012), v3(0.09, 0.14, 0.088));    // quad bulk
+    C(L ? 5 : 6, 0, v3(sg * 0.095, 0.5, 0), v3(sg * 0.095, 0.085, -0.004), 0.058, 0.04);   // shin
+    E(L ? 5 : 6, 0, v3(sg * 0.095, 0.37, -0.028), v3(0.054, 0.1, 0.058));  // calf muscle
+    C(L ? 3 : 4, 3, v3(sg * 0.238, 1.415, 0), v3(sg * 0.245, 1.13, 0), 0.047, 0.036);   // upper arm
+    E(L ? 3 : 4, 3, v3(sg * 0.25, 1.22, 0.01), v3(0.042, 0.07, 0.042));      // bicep
+    C(L ? 7 : 8, 4, v3(sg * 0.245, 1.13, 0), v3(sg * 0.25, 0.835, 0.004), 0.037, 0.027);   // forearm
+    E(L ? 7 : 8, 4, v3(sg * 0.25, 1.03, -0.004), v3(0.039, 0.075, 0.039));  // forearm muscle
+  }
+  E(0, 2, v3(0, 1.32, 0), v3(0.172, 0.17, 0.108));                        // ribcage
+  E(0, 2, v3(0, 1.2, 0), v3(0.15, 0.1, 0.1));                             // waist
+  C(0, 5, v3(0, 1.49, 0), v3(0, 1.575, 0.012), 0.056, 0.049);             // neck
+  E(0, 5, v3(0, 1.645, 0.005), v3(0.086, 0.113, 0.099));                  // cranium
+  E(0, 5, v3(0, 1.595, 0.022), v3(0.071, 0.058, 0.076));                  // jaw
+  E(0, 5, v3(0, 1.566, 0.085), v3(0.03, 0.022, 0.028));                   // chin
+  E(0, 5, v3(0, 1.678, 0.078), v3(0.072, 0.02, 0.03));                    // brow ridge
+  for (const sg of [-1, 1]) E(0, 5, v3(sg * 0.05, 1.62, 0.075), v3(0.028, 0.03, 0.03));   // cheekbones
+  const KS = 0.05;
+  const smin = (a, b) => { const h = Math.max(KS - Math.abs(a - b), 0) / KS; return Math.min(a, b) - h * h * KS * 0.25; };
+  const sdf = (p) => { let d = 1e9; for (const q of P) d = smin(d, q.f(p)); return d; };
+  // surface nets
+  const H = 0.0185, x0 = -0.44, y0 = 0.04, z0 = -0.2, nx = Math.ceil(0.88 / H), ny = Math.ceil(1.76 / H), nzz = Math.ceil(0.42 / H);
+  const idxN = (i, j, k) => (k * (ny + 1) + j) * (nx + 1) + i;
+  const val = new Float32Array((nx + 1) * (ny + 1) * (nzz + 1));
+  for (let k = 0; k <= nzz; k++) for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) val[idxN(i, j, k)] = sdf([x0 + i * H, y0 + j * H, z0 + k * H]);
+  const vid = new Int32Array(nx * ny * nzz).fill(-1);
+  const pos = [], nor = [];
+  const grad = (p) => { const e = 0.004; return [sdf([p[0] + e, p[1], p[2]]) - sdf([p[0] - e, p[1], p[2]]), sdf([p[0], p[1] + e, p[2]]) - sdf([p[0], p[1] - e, p[2]]), sdf([p[0], p[1], p[2] + e]) - sdf([p[0], p[1], p[2] - e])]; };
+  const cid = (i, j, k) => (k * ny + j) * nx + i;
+  const corners = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
+  const edges = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+  for (let k = 0; k < nzz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const d = corners.map(([a, b, c]) => val[idxN(i + a, j + b, k + c)]);
+    let neg = 0; for (const x of d) if (x < 0) neg++;
+    if (neg === 0 || neg === 8) continue;
+    let sx = 0, sy = 0, sz = 0, n = 0;
+    for (const [a, b] of edges) {
+      if ((d[a] < 0) === (d[b] < 0)) continue;
+      const t = d[a] / (d[a] - d[b]), ca = corners[a], cb = corners[b];
+      sx += ca[0] + (cb[0] - ca[0]) * t; sy += ca[1] + (cb[1] - ca[1]) * t; sz += ca[2] + (cb[2] - ca[2]) * t; n++;
+    }
+    const pp = [x0 + (i + sx / n) * H, y0 + (j + sy / n) * H, z0 + (k + sz / n) * H];
+    vid[cid(i, j, k)] = pos.length / 3; pos.push(...pp);
+    const g = grad(pp), gl = Math.hypot(...g) || 1; nor.push(g[0] / gl, g[1] / gl, g[2] / gl);
+  }
+  const idx = [];
+  const quad = (a, b, c, d, flip) => { if (a < 0 || b < 0 || c < 0 || d < 0) return; flip ? idx.push(a, c, b, a, d, c) : idx.push(a, b, c, a, c, d); };
+  for (let k = 1; k < nzz; k++) for (let j = 1; j < ny; j++) for (let i = 1; i < nx; i++) {
+    const s0 = val[idxN(i, j, k)] < 0;
+    const sX = val[idxN(i + 1, j, k)] < 0, sY = val[idxN(i, j + 1, k)] < 0, sZ = val[idxN(i, j, k + 1)] < 0;
+    if (s0 !== sX) quad(vid[cid(i, j - 1, k - 1)], vid[cid(i, j, k - 1)], vid[cid(i, j, k)], vid[cid(i, j - 1, k)], s0);
+    if (s0 !== sY) quad(vid[cid(i - 1, j, k - 1)], vid[cid(i - 1, j, k)], vid[cid(i, j, k)], vid[cid(i, j, k - 1)], s0);
+    if (s0 !== sZ) quad(vid[cid(i - 1, j - 1, k)], vid[cid(i, j - 1, k)], vid[cid(i, j, k)], vid[cid(i - 1, j, k)], s0);
+  }
+  // per-vertex segment weights
+  const nv = pos.length / 3;
+  const aPart = new Float32Array(nv), aSw = new Float32Array(nv), aSw2 = new Float32Array(nv), aBl = new Float32Array(nv);
+  const nb = (g) => (g === 0 ? [] : g <= 2 ? [0, g + 4] : g <= 4 ? [0, g + 4] : g <= 6 ? [g - 4] : [g - 4]);
+  for (let v = 0; v < nv; v++) {
+    const p = [pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]];
+    let best = 1e9, bi = 0; const ds = P.map((q, qi) => { const d = q.f(p); if (d < best) { best = d; bi = qi; } return d; });
+    const g1 = P[bi].g; let part = P[bi].part;
+    if (part === 2 && p[1] < 1.0) part = 0;
+    let d2 = 1e9, g2 = g1; const ok = nb(g1);
+    P.forEach((q, qi) => { if (q.g !== g1 && ok.includes(q.g) && ds[qi] < d2) { d2 = ds[qi]; g2 = q.g; } });
+    const wdt = 0.055, t = g2 === g1 ? 0 : Math.max(0, Math.min(0.5, 0.5 * (1 - (d2 - best) / wdt)));
+    aPart[v] = part; aSw[v] = g1; aSw2[v] = g2; aBl[v] = t;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(nv * 2), 2));
+  g.setIndex(idx);
+  const ng = g.toNonIndexed();
+  // expand per-vertex attributes to the non-indexed layout
+  const ix = idx, outN = ix.length;
+    const ag = new Float32Array(outN * 4);
+  for (let q = 0; q < outN; q++) { const v = ix[q]; ag[q * 4] = aPart[v]; ag[q * 4 + 1] = aSw[v]; ag[q * 4 + 2] = aSw2[v]; ag[q * 4 + 3] = aBl[v]; }
+  ng.setAttribute('aG', new THREE.Float32BufferAttribute(ag, 4));
+  return ng;
+}
 
 function personGeometry() {
   const G_ = [];
@@ -38,18 +151,10 @@ function personGeometry() {
     const hip = [sg * 0.095, 0.93, 0], knee = [sg * 0.095, 0.5, 0], sh = [sg * 0.25, 1.43, 0], elb = [sg * 0.25, 1.13, 0];
     const L = sg < 0;
     // ---- legs: thigh (hip) + kneecap; calf + shoe (knee under hip) ----
-    add(T(lathe([[0, 0.5], [0.058, 0.5], [0.068, 0.6], [0.081, 0.72], [0.09, 0.86], [0.094, 0.94], [0, 0.945]], 16), [sg * 0.095, 0, 0]), PART.LEG, hip, L ? 1 : 2, hip);
-    add(T(ball(0.06, 10), [sg * 0.095, 0.5, 0.006]), PART.LEG, hip, L ? 1 : 2, hip);
-    add(T(lathe([[0, 0.075], [0.044, 0.075], [0.053, 0.09], [0.05, 0.13], [0.052, 0.25], [0.056, 0.4], [0.06, 0.49], [0, 0.505]], 14), [sg * 0.095, 0, 0]), PART.LEG, knee, L ? 5 : 6, hip);
     add(T(ball(1, 12), [sg * 0.095, 0.058, 0.058], [0.05, 0.044, 0.125]), PART.SHOE, knee, L ? 5 : 6, hip);          // shoe upper
     add(T(ball(1, 10), [sg * 0.095, 0.058, -0.035], [0.046, 0.04, 0.05]), PART.SHOE, knee, L ? 5 : 6, hip);        // heel
     add(T(new THREE.BoxGeometry(0.088, 0.014, 0.265), [sg * 0.095, 0.008, 0.052]), PART.SHOE, knee, L ? 5 : 6, hip); // sole
     // ---- arms: upper arm + elbow ball (shoulder); forearm + hand (elbow under shoulder) ----
-    add(T(lathe([[0, 1.13], [0.038, 1.13], [0.043, 1.2], [0.049, 1.3], [0.054, 1.4], [0.05, 1.45], [0.034, 1.477], [0, 1.483]], 12), [sg * 0.25, 0, 0]), PART.UPPER, sh, L ? 3 : 4, sh);
-    add(T(ball(0.04, 8), [sg * 0.25, 1.13, 0]), PART.UPPER, sh, L ? 3 : 4, sh);
-    add(T(ball(1, 10), [sg * 0.232, 1.425, 0], [0.062, 0.058, 0.06]), PART.UPPER, sh, L ? 3 : 4, sh);          // deltoid
-    add(T(ball(1, 8), [sg * 0.25, 1.17, -0.012], [0.05, 0.03, 0.05]), PART.UPPER, sh, L ? 3 : 4, sh);        // bicep bulge
-    add(T(lathe([[0, 0.83], [0.026, 0.83], [0.03, 0.87], [0.036, 0.96], [0.041, 1.06], [0.04, 1.13], [0, 1.135]], 12), [sg * 0.25, 0, 0]), PART.FORE, elb, L ? 7 : 8, sh);
     add(T(ball(1, 10), [sg * 0.25, 0.795, 0.006], [0.029, 0.056, 0.04]), PART.HAND, elb, L ? 7 : 8, sh);
     add(T(ball(1, 8), [sg * 0.25 - sg * 0.02, 0.83, 0.03], [0.011, 0.028, 0.012], [0.3, 0, -sg * 0.3]), PART.HAND, elb, L ? 7 : 8, sh);   // thumb
     for (let f = 0; f < 4; f++) {                                                                      // fingers: relaxed, slightly curled
@@ -70,8 +175,8 @@ function personGeometry() {
     add(T(new THREE.BoxGeometry(0.034, 0.006, 0.008), [sg * 0.034, 1.674, 0.088], [1, 1, 1], [0, 0, sg * -0.12]), PART.FACE, [0, 1.45, 0], 0, [0, 1.45, 0]);
   }
   const P0 = [0, 1.0, 0], HP = [0, 1.45, 0];
+  G_.push(bodyGeometry());
   // ---- torso (elliptical loft), collar, belt + buckle ----
-  add(T(lathe([[0, 0.88], [0.135, 0.885], [0.16, 0.95], [0.158, 1.03], [0.145, 1.12], [0.142, 1.16], [0.158, 1.26], [0.182, 1.35], [0.2, 1.41], [0.195, 1.455], [0.13, 1.485], [0.07, 1.5], [0, 1.505]], 20), [0, 0, 0], [1, 1, 0.62]), PART.TORSO, P0);
   for (let k = 0; k < 4; k++) add(T(ball(1, 6), [0, 1.43 - k * 0.1, 0.104 - k * 0.004], [0.008, 0.008, 0.005]), PART.BELT, P0);   // shirt buttons
   add(T(new THREE.BoxGeometry(0.03, 0.02, 0.03), [0.0, 1.37, 0.108], [1, 1, 1]), PART.TORSO, P0);
   add(T(new THREE.SphereGeometry(0.045, 10, 8), [0, 1.52, -0.075], [1.2, 1.1, 0.8]), PART.LONGHAIR, HP);   // hair tie knot / nape
@@ -86,11 +191,7 @@ function personGeometry() {
   for (const sg of [-1, 1]) add(T(new RoundedBoxGeometry(0.1, 0.03, 0.022, 2, 0.008), [sg * 0.1, 0.935, 0.108], [1, 1, 1], [0.12, 0, sg * 0.14]), PART.JACKET, P0);   // pocket flaps
   add(T(new THREE.BoxGeometry(0.008, 0.72, 0.008), [0, 1.14, 0.122]), PART.JACKET, P0);                                    // zip track
   // ---- neck, head (egg + jaw + nose + mouth), hair, long hair, hat ----
-  add(T(new THREE.CylinderGeometry(0.046, 0.054, 0.1, 12), [0, 1.525, 0]), PART.HEAD, HP);
-  add(T(ball(1, 16), [0, 1.642, 0.004], [0.089, 0.113, 0.099]), PART.HEAD, HP);
-  add(T(ball(1, 12), [0, 1.588, 0.014], [0.072, 0.068, 0.084]), PART.HEAD, HP);
   for (const sg of [-1, 1]) add(T(ball(1, 6), [sg * 0.011, 1.608, 0.108], [0.006, 0.004, 0.004]), PART.FACE, HP);   // nostrils
-  add(T(ball(1, 8), [0, 1.566, 0.098], [0.022, 0.014, 0.014]), PART.HEAD, HP);                                   // chin
 
   add(T(new THREE.ConeGeometry(0.014, 0.038, 8), [0, 1.622, 0.106], [1, 1, 1], [Math.PI / 2 - 0.35, 0, 0]), PART.HEAD, HP);
   add(T(ball(1, 8), [0, 1.5935, 0.0975], [0.0205, 0.0042, 0.0062]), PART.LIPS, HP);                     // upper lip
@@ -214,36 +315,48 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   s.rough = rough; s.h = h * fd; s.ao = ao;
 }`;
 const VERT = {
-  head: `attribute float aPart; attribute float aSw; attribute vec3 aPivot; attribute vec3 aPivot2; attribute vec3 aAnim; attribute vec3 aCShirt; attribute vec3 aCPants; attribute vec3 aCSkin; attribute vec3 aCHair; varying vec3 vPC; varying float vPart; varying float vSeed; varying float vJk; uniform float uWet; uniform float uTime; float gA1, gA2;
+  head: `attribute vec4 aG; 
+#define aPart aG.x
+#define aSw aG.y
+#define aSw2 aG.z
+#define aBlend aG.w
+ attribute vec3 aAnim; attribute vec3 aCShirt; attribute vec3 aCPants; attribute vec3 aCSkin; attribute vec3 aCHair; varying vec3 vPC; varying float vPart; varying float vSeed; varying float vJk; uniform float uWet; uniform float uTime;
 vec3 rotX(vec3 d, float a){ float c = cos(a), s = sin(a); return vec3(d.x, d.y * c - d.z * s, d.y * s + d.z * c); }
-void poseAngles(){
+void angles(float g, out float a1, out float a2){
   float sp = max(aAnim.y, 0.0);
   bool seated = aAnim.y < -0.5;
-  gA1 = 0.0; gA2 = 0.0;
-  if (aSw < 0.5) return;
-  bool left = mod(aSw, 2.0) > 0.5;
-  float ph = aAnim.x + (left ? 0.0 : 3.14159);                 // this side's leg phase
-  float sw = sin(ph) * 0.72 * sp;                               // hip angle (positive = leg back)
+  a1 = 0.0; a2 = 0.0;
+  if (g < 0.5) return;
+  bool left = mod(g, 2.0) > 0.5;
+  float ph = aAnim.x + (left ? 0.0 : 3.14159);
+  float sw = sin(ph) * 0.72 * sp;
   float idle = sin(uTime * 0.8 + aAnim.z * 6.0 + (left ? 0.0 : 1.7)) * 0.025 * (1.0 - min(sp, 1.0));
-  if (aSw < 2.5) { gA1 = sw; if (seated) gA1 = -1.45; }
-  else if (aSw < 4.5) { gA1 = -sw * 0.85 + idle; if (seated) gA1 = -0.5; }
-  else if (aSw < 6.5) { float knee = sp * (0.1 + 1.0 * max(0.0, -cos(ph - 0.35))); gA1 = seated ? -1.45 : sw; gA2 = seated ? 1.5 : knee; }
-  else { float a = -sw * 0.85; gA1 = seated ? -0.5 : a - 0.06 + idle; gA2 = seated ? -1.15 : -(0.28 + sp * (0.12 + 0.55 * max(0.0, -a / 0.6))); }
+  if (g < 2.5) { a1 = sw; if (seated) a1 = -1.45; }
+  else if (g < 4.5) { a1 = -sw * 0.85 + idle; if (seated) a1 = -0.5; }
+  else if (g < 6.5) { float knee = sp * (0.1 + 1.0 * max(0.0, -cos(ph - 0.35))); a1 = seated ? -1.45 : sw; a2 = seated ? 1.5 : knee; }
+  else { float a = -sw * 0.85; a1 = seated ? -0.5 : a - 0.06 + idle; a2 = seated ? -1.15 : -(0.28 + sp * (0.12 + 0.55 * max(0.0, -a / 0.6))); }
 }
+vec3 poseG(float g, vec3 p, bool nrm){
+  if (g < 0.5) return p;
+  float a1, a2; angles(g, a1, a2);
+  float sg = mod(g, 2.0) > 0.5 ? -1.0 : 1.0;
+  if (g > 4.5) { vec3 pv = g < 6.5 ? vec3(sg * 0.095, 0.5, 0.0) : vec3(sg * 0.25, 1.13, 0.0); p = nrm ? rotX(p, a2) : pv + rotX(p - pv, a2); }
+  vec3 hp = (g < 2.5 || (g > 4.5 && g < 6.5)) ? vec3(sg * 0.095, 0.93, 0.0) : vec3(sg * 0.25, 1.43, 0.0);
+  p = nrm ? rotX(p, a1) : hp + rotX(p - hp, a1);
+  return p;
+}
+vec3 poseMix(vec3 p, bool nrm){ vec3 a = poseG(aSw, p, nrm); return aBlend > 0.001 ? mix(a, poseG(aSw2, p, nrm), aBlend) : a; }
 mat2 rot2(float a){ float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }`,
   normal: /* glsl */`
 {
-  poseAngles();
-  if (aSw > 4.5) objectNormal = rotX(objectNormal, gA2);
-  if (aSw > 0.5) objectNormal = rotX(objectNormal, gA1);
+  objectNormal = normalize(poseMix(objectNormal, true));
   { float wU = smoothstep(0.85, 1.25, position.y); if ((aSw > 2.5 && aSw < 4.5) || aSw > 6.5) wU = 1.0; float tw2 = sin(aAnim.x) * 0.1 * max(aAnim.y, 0.0) * wU; objectNormal.xz = rot2(tw2) * objectNormal.xz; }
 }`,
   begin: /* glsl */`
 {
   float sp = max(aAnim.y, 0.0), seed = aAnim.z;
   vec3 pp = transformed;
-  if (aSw > 4.5) pp = aPivot + rotX(pp - aPivot, gA2);
-  if (aSw > 0.5) { vec3 hp = aSw > 4.5 ? aPivot2 : aPivot; pp = hp + rotX(pp - hp, gA1); }
+  pp = poseMix(pp, false);
   transformed = pp;
   float ph0 = aAnim.x, seated0 = aAnim.y < -0.5 ? 1.0 : 0.0;
   float bob = abs(sin(ph0)) * 0.03 * sp + sin(ph0 * 0.31 + seed * 20.0) * 0.004;
@@ -281,7 +394,7 @@ mat2 rot2(float a){ float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }`,
   else if (aPart < 14.5) pc = aCSkin;
   else if (aPart < 15.5) pc = vec3(0.8);
   else pc = mix(aCSkin, vec3(0.5, 0.15, 0.16), 0.6);
-  if (hide) transformed = aPivot;
+  if (hide) transformed = vec3(0.0, 1.3, 0.0);
   vPC = pc; vPart = aPart; vSeed = seed; vJk = jk ? 1.0 : 0.0;
 }`,
 };
