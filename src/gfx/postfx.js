@@ -78,7 +78,7 @@ void main(){
 const DOWN_FRAG = /* glsl */`
 uniform sampler2D tex; uniform vec2 uTexel; uniform float uKaris;
 varying vec2 vUv;
-vec3 T(vec2 o){ return texture(tex, vUv + o * uTexel).rgb; }
+vec3 T(vec2 o){ vec3 c = texture(tex, vUv + o * uTexel).rgb; if (any(isnan(c)) || any(isinf(c))) return vec3(0.0); return min(c, vec3(48.0)); }   // fireflies / NaNs must never enter the bloom chain
 float kw(vec3 c){ return 1.0 / (1.0 + dot(c, vec3(0.2126, 0.7152, 0.0722))); }
 void main(){
   vec3 a = T(vec2(-2,-2)), b = T(vec2(0,-2)), c = T(vec2(2,-2));

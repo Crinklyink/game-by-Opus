@@ -1,0 +1,22 @@
+// Save/load round trip in headless Chromium: trade, buy upgrade, move, save, reload with ?keep and compare.
+import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
+const server = http.createServer((req, res) => { const p = decodeURIComponent(new URL(req.url, 'http://x').pathname); const f = path.join(root, p === '/' ? 'index.html' : p); fs.readFile(f, (e, d) => { if (e) { res.writeHead(404); res.end(); } else { res.writeHead(200, { 'Content-Type': types[path.extname(f)] || 'application/octet-stream' }); res.end(d); } }); });
+await new Promise((r) => server.listen(0, r));
+const port = server.address().port;
+const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--use-gl=angle', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'] });
+const ctx = await browser.newContext({ viewport: { width: 480, height: 270 } });
+const page = await ctx.newPage();
+const logs = []; page.on('console', (m) => { if (m.type() === 'error') logs.push(m.text().slice(0, 300)); }); page.on('pageerror', (e) => logs.push('pageerror ' + e.message));
+const boot = async (q) => { await page.goto(`http://localhost:${port}/index.html?test=1&w=480&h=270&q=low&${q}`); await page.waitForFunction(() => window.__ready || window.__bootError, null, { timeout: 180000 }); };
+await boot('t=12');
+const before = await page.evaluate(() => { const g = window.__game; g.G.time.hour = 11; g.step(1); g.game.trade('NXG', 7, 'buy'); g.game.state.hunger = 41; g.game.state.pantry = { eggs: 3, pasta: 2 }; g.tp(-38.5, 165.7, 28.5, 1.2, 0); g.simulate(2, 0.05); g.game.save(true); const S = g.game.state; return { cash: +S.cash.toFixed(2), shares: g.game.market.pos.NXG && g.game.market.pos.NXG.shares, hunger: S.hunger, pantry: S.pantry, pos: g.player.pos.toArray().map((v) => +v.toFixed(2)), day: S.day }; });
+console.log('before', JSON.stringify(before));
+await boot('t=12&keep=1');
+const after = await page.evaluate(() => { const g = window.__game; const S = g.game.state; return { cash: +S.cash.toFixed(2), shares: g.game.market.pos.NXG && g.game.market.pos.NXG.shares, hunger: S.hunger, pantry: S.pantry, pos: g.player.pos.toArray().map((v) => +v.toFixed(2)), day: S.day, hasSave: g.game.hasSave() }; });
+console.log('after ', JSON.stringify(after));
+const ok = after.cash === before.cash && after.shares === before.shares && Math.abs(after.hunger - before.hunger) < 3 && JSON.stringify(after.pantry) === JSON.stringify(before.pantry) && Math.abs(after.pos[0] - before.pos[0]) < 0.3 && Math.abs(after.pos[2] - before.pos[2]) < 0.3;
+console.log(ok ? 'SAVE/LOAD OK' : 'SAVE/LOAD MISMATCH'); if (logs.length) console.log('console errors:', logs.join('\n'));
+await browser.close(); server.close(); process.exit(ok ? 0 : 1);

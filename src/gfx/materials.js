@@ -86,7 +86,7 @@ diffuseColor.rgb = ps.alb;
     .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = bumpN(-vViewPosition, normal, vec2(dFdx(ps.h), dFdy(ps.h)), faceDirection);')
     .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += ps.emis;')
     .replace('#include <aomap_fragment>', 'reflectedLight.indirectDiffuse *= ps.ao; reflectedLight.indirectSpecular *= mix(1.0, ps.ao, 0.6);')
-    .replace('#include <fog_fragment>', 'gl_FragColor.rgb = applyFog(gl_FragColor.rgb, vWPos);');
+    .replace('#include <fog_fragment>', 'gl_FragColor.rgb = min(gl_FragColor.rgb, vec3(48.0)); if (any(isnan(gl_FragColor.rgb))) gl_FragColor.rgb = vec3(0.0);\ngl_FragColor.rgb = applyFog(gl_FragColor.rgb, vWPos);');
 }
 
 // pm('woodfloor', { color, col2, rough, metal, scale, p:[x,y,z,w], physical, sheen, clearcoat, wet, interior, ... })
@@ -127,7 +127,11 @@ export function glowMat(color, intensity = 6, o = {}) {
 
 export function setInteriorEnv(tex) {
   G.interiorEnv = tex;
-  for (const m of interiorMats) { m.envMap = tex; m.needsUpdate = false; }
+  for (const m of interiorMats) {
+    // a PMREM's layout size is compiled into the shader: a different-sized env needs a recompile or it samples garbage
+    if (m.envMap && tex && m.envMap.image && tex.image && m.envMap.image.height !== tex.image.height) m.needsUpdate = true;
+    m.envMap = tex;
+  }
 }
 
 // Unlit-but-fogged basic material for screens, sprites of light, decals.

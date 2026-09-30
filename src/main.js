@@ -74,15 +74,17 @@ async function boot() {
   atmo.dome.layers.enable(1); glow.mesh.layers.enable(1);
   const audio = new GameAudio(); G.audio = audio;
   // neutral warm "room" environment for interiors other than the apartment (which has its own live probe)
-  const roomEnv = (() => {
+  const makeRoomEnv = () => {
     const sc = new THREE.Scene();
     const m = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, vertexShader: 'varying vec3 v; void main(){ v = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
       fragmentShader: 'varying vec3 v; void main(){ float y = normalize(v).y; vec3 top = vec3(1.0,0.9,0.75)*1.1; vec3 mid = vec3(0.55,0.5,0.45)*0.7; vec3 bot = vec3(0.2,0.17,0.14)*0.5; vec3 c = y > 0.0 ? mix(mid, top, pow(y, 0.7)) : mix(mid, bot, pow(-y, 0.6)); gl_FragColor = vec4(c,1.0); }' });
     sc.add(new THREE.Mesh(new THREE.SphereGeometry(50, 24, 16), m));
     const pm2 = new THREE.PMREMGenerator(renderer);
-    const rt = pm2.fromScene(sc, 0.02, 1, 100);
+    const rt = pm2.fromScene(sc, 0, 1, 100);
+    pm2.dispose();
     return rt.texture;
-  })();
+  };
+  const roomEnv = makeRoomEnv();
   setInteriorEnv(roomEnv); let envMode = 'room';
 
   // ---------------------------------------------------------------- resolution handling
@@ -148,7 +150,7 @@ async function boot() {
   const game = new Game({ ui, audio, player, world, post, atmo, camera });
   game.setRes = setRes;
   ui.onLockLost = () => { if (ui.started && !ui.modalOpen && !ui.paused) showPause(game); };
-  const probe = q.probe ? new InteriorProbe(renderer, scene, new THREE.Vector3(-40, APT_Y + 1.5, 26), new THREE.Vector3(-49, APT_Y, 20.45), new THREE.Vector3(-31, APT_Y + 3.6, 32.4), 128) : null;
+  const probe = q.probe ? new InteriorProbe(renderer, scene, new THREE.Vector3(-40, APT_Y + 1.5, 26), new THREE.Vector3(-49, APT_Y, 20.45), new THREE.Vector3(-31, APT_Y + 3.6, 32.4), 256) : null;   // 256 so its PMREM has the same layout as the room/sky envs (the size is baked into every shader that samples them)
   const inApt = () => player.level === 1 && camera.position.y > APT_Y - 1 && camera.position.x > -60 && camera.position.x < -20 && camera.position.z > 10 && camera.position.z < 40;
 
   const titleCam = { t: 0 };
@@ -255,7 +257,7 @@ async function boot() {
   ui.setLoading(1, 'Ready');
 
   window.__game = {
-    THREE, G, game, player, camera, post, atmo, world, renderer, scene, audio, ui,
+    THREE, G, game, player, camera, post, atmo, world, renderer, scene, audio, ui, probe, roomEnv,
     tp: (x, y, z, yaw = 0, pitch = 0, level) => { player.teleport(x, y - 1.68, z, yaw, level ?? (y > 100 ? 1 : 0)); player.pitch = pitch; player.eye = 1.68; },
     setTime: (h) => { G.time.hour = h; },
     setRain: (r) => { world.weatherSys.forced = r > 0.1 ? (r > 0.9 ? 'storm' : 'rain') : 'clear'; G.weather.target = G.weather.rain = r; G.weather.wet = r > 0.1 ? 1 : 0; },

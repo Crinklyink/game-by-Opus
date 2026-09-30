@@ -282,13 +282,15 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   vec2 cell = vec2(floor(cx), row);
   vec2 f = vec2(fract(cx)*sz.x, fract(uv.y/sz.y)*sz.y);
   float e = min(min(f.x, sz.x-f.x), min(f.y, sz.y-f.y));
-  float g = smoothstep(uP.z*0.5, uP.z*0.5+0.0007, e);
-  float bev = smoothstep(uP.z*0.5, uP.z*0.5+0.004, e);
+  float fpx = length(fwidth(uv));
+  float gw = max(uP.z, fpx * 1.3);                                   // grout widens to a pixel but keeps its average darkness
+  float g = smoothstep(gw*0.25, gw*0.5, e);
+  float gd = (1.0 - g) * min(1.0, uP.z / gw);
   float r = hash21(cell);
   vec3 tc = s.alb * (0.93 + 0.1*r);
-  s.alb = mix(uCol2, tc, g);
-  s.rough = mix(0.9, 0.1 + 0.07*r, g);
-  s.h = (-(1.0-bev)*0.0012 + (r-0.5)*0.0002) * dfade(wp, 0.01);
+  s.alb = mix(uCol2, tc, 1.0 - gd);
+  s.rough = mix(0.9, 0.1 + 0.07*r, 1.0 - gd);
+  s.h = (-gd*0.0008*(1.0 - smoothstep(0.003, 0.012, fpx)) + (r-0.5)*0.0002) * dfade(wp, 0.01);
 }`,
 
   brick: /* glsl */`
@@ -301,8 +303,9 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   float cx = (uv.x+off)/(bw+mj);
   vec2 cell = vec2(floor(cx), row);
   vec2 f = vec2(fract(cx)*(bw+mj), fract(uv.y/(bh+mj))*(bh+mj));
-  float mx = smoothstep(0.0, 0.0018, f.x)*smoothstep(0.0, 0.0018, bw-f.x);
-  float my = smoothstep(0.0, 0.0018, f.y)*smoothstep(0.0, 0.0018, bh-f.y);
+  float aw = max(0.0018, length(fwidth(uv)) * 1.2);
+  float mx = smoothstep(0.0, aw, f.x)*smoothstep(0.0, aw, bw-f.x);
+  float my = smoothstep(0.0, aw, f.y)*smoothstep(0.0, aw, bh-f.y);
   float b = mx*my;
   float r = hash21(cell);
   vec3 bc = mix(s.alb, uCol2, r) * (0.82 + 0.3*nz(p*9.0).r) * (0.9 + 0.2*nz(p*44.0).g);

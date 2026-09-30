@@ -31,12 +31,24 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
 }`;
 PROC.product = /* glsl */`
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
-  float band = smoothstep(0.02, 0.0, abs(fract(p.y * 5.0 + 0.3) - 0.5) - 0.26);
-  float cap = step(0.9, fract(p.y * 1.7 + 0.03));
-  vec3 c = s.alb;
-  c = mix(c, vec3(1.0) - c*0.5, band * 0.6);
-  s.alb = c * (0.9 + 0.2*nz(p*30.0).r);
-  s.rough = 0.4; s.h = 0.0;
+  float y = clamp(p.y, 0.0, 1.0);                                   // 0..1 over the pack height
+  vec3 base = s.alb;
+  float k = fract(dot(base, vec3(12.9898, 78.233, 37.719)) * 43.5453);
+  bool side = abs(n.y) < 0.5;
+  float u = abs(n.x) > abs(n.z) ? p.z : p.x;                         // across the face
+  float detail = 1.0 - smoothstep(0.004, 0.016, length(fwidth(wp)));
+  float label = side ? smoothstep(0.20, 0.22, y) * (1.0 - smoothstep(0.70, 0.72, y)) : 0.0;
+  vec3 paper = vec3(0.92, 0.9, 0.85);
+  vec3 c = mix(base, base * 0.5, 1.0 - smoothstep(0.12, 0.14, y));  // darker foot
+  c = mix(c, base * 1.15, smoothstep(0.86, 0.88, y) * 0.5);           // header
+  float title = smoothstep(0.52, 0.53, y) * (1.0 - smoothstep(0.66, 0.67, y)) * step(abs(u), 0.4);
+  float lines = step(0.5, fract(y * 26.0)) * smoothstep(0.24, 0.26, y) * (1.0 - smoothstep(0.48, 0.5, y));
+  float len = 0.18 + 0.2 * fract(k * 7.0 + floor(y * 26.0) * 0.37);
+  lines *= step(abs(u + 0.02), len) * detail;
+  vec3 lab = mix(paper, base, title);
+  lab *= 1.0 - 0.55 * lines;
+  s.alb = mix(c, lab, label) * (0.94 + 0.1 * nz(p * 12.0).r * detail);
+  s.rough = 0.42 - 0.12 * label; s.h = 0.0;
 }`;
 PROC.asphaltLot = /* glsl */`
 uniform vec4 uP;
@@ -340,7 +352,7 @@ export function buildGrocery(scene, glow, ctx) {
   const shelfM = pm('metal', { color: 0xcfd3d6, p: [1, 40, 0, 0], interior: true });
   const shelfBack = pm('paint', { color: 0xe8eae4, interior: true });
   const gondolas = [];
-  const prods = { boxes: [], cans: [] };
+  const prods = { boxes: [], cans: [], bottles: [], jars: [] };
   const cols = [0xd8342a, 0xf2b420, 0x2e8fd8, 0x3ea85a, 0xf0e6d0, 0x8a3ac8, 0xe86a20, 0x1c1c22, 0xf58ab0, 0x5ad0d0, 0xb0d840, 0xffffff];
   const shelfX = [25.5, 29.5, 33.5, 47.5, 51.5, 55.5, 59.5];
   const zA = 16.5, zB = 37.5;
@@ -353,11 +365,13 @@ export function buildGrocery(scene, glow, ctx) {
       for (let r = 0; r < 5; r++) {
         let z = zA + 0.2;
         while (z < zB - 0.2) {
-          const can = R() < 0.35;
-          const w = can ? 0.085 : 0.1 + R() * 0.08, h = can ? 0.13 : 0.16 + R() * 0.12, d = can ? 0.085 : 0.16;
+          const kr = R(), kind = kr < 0.28 ? 'cans' : kr < 0.45 ? 'bottles' : kr < 0.56 ? 'jars' : 'boxes';
+          const w = kind === 'cans' ? 0.085 : kind === 'bottles' ? 0.07 + R() * 0.02 : kind === 'jars' ? 0.08 : 0.1 + R() * 0.08;
+          const h = kind === 'cans' ? 0.13 : kind === 'bottles' ? 0.22 + R() * 0.08 : kind === 'jars' ? 0.12 : 0.16 + R() * 0.12;
+          const d = kind === 'boxes' ? 0.16 : w;
           const gap = R() < 0.05 ? 0.4 : 0;
           const row = { x: gx + side * (0.3 + (R() - 0.5) * 0.04), y: 0.33 + r * 0.34, z: z + w / 2 + gap, w, h, d, c: cols[Math.floor(R() * cols.length)] };
-          (can ? prods.cans : prods.boxes).push(row);
+          prods[kind].push(row);
           z += w + 0.012 + gap;
         }
       }
@@ -380,6 +394,10 @@ export function buildGrocery(scene, glow, ctx) {
   const canG = new THREE.CylinderGeometry(0.5, 0.5, 1, 10); canG.translate(0, 0.5, 0);
   instBoxes(prods.boxes, boxG, pm('product', { color: 0xffffff, rough: 0.4, interior: true }));
   instBoxes(prods.cans, canG, pm('product', { color: 0xffffff, rough: 0.3, metal: 0.3, interior: true }));
+  const botG = new THREE.LatheGeometry([[0, 0], [0.5, 0], [0.5, 0.55], [0.4, 0.68], [0.2, 0.76], [0.17, 0.8], [0.17, 0.92], [0.21, 0.93], [0.21, 1.0], [0, 1.0]].map(([r, y]) => new THREE.Vector2(r, y)), 14);
+  const jarG = new THREE.LatheGeometry([[0, 0], [0.5, 0], [0.5, 0.8], [0.44, 0.82], [0.44, 1.0], [0, 1.0]].map(([r, y]) => new THREE.Vector2(r, y)), 14);
+  instBoxes(prods.bottles, botG, pm('product', { color: 0xffffff, rough: 0.2, metal: 0.05, interior: true }));
+  instBoxes(prods.jars, jarG, pm('product', { color: 0xffffff, rough: 0.25, interior: true }));
   // ---- produce (west), fridges (back wall), bakery/deli (east) ----
   const crate = pm('woodfurn', { color: 0xb8925a, col2: 0x6a4a28, interior: true });
   const produceCols = [0xd8342a, 0xf2b420, 0x3ea85a, 0xe86a20, 0xb0d840, 0x8a3ac8, 0xffe08a, 0xd85a3a];
