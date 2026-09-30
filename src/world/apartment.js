@@ -57,7 +57,7 @@ export function buildApartment(scene, ctx) {
   // floor slab (top at APT_Y) and hall floor
   A.box(M.floor, UNIT.x1 - UNIT.x0 + 0.4, 0.05, UNIT.z1 - UNIT.z0 + 0.2, (UNIT.x0 + UNIT.x1) / 2, Y - 0.05, (UNIT.z0 + UNIT.z1) / 2 - 0.0);
   A.box(M.carpet, HALL_X1 - HALL_X0, 0.05, HALL_Z1 - HALL_Z0 + 0.1, (HALL_X0 + HALL_X1) / 2, Y - 0.05, (HALL_Z0 + HALL_Z1) / 2);
-  A.box(M.concrete, 60, 0.4, 60, -40, Y - 0.5, 40);                     // structural slab under everything
+  A.box(M.concrete, 39.6, 0.4, 39.6, -40, Y - 0.5, 40);                 // structural slab: stays inside the 40 x 40 m tower footprint
 
   // outer shell walls of the unit
   wall(-49.25, -49.0, UNIT.z0, 32.62);                                  // west
@@ -126,7 +126,7 @@ export function buildApartment(scene, ctx) {
   neighbour(-29.6, 4802); neighbour(-25.0, 4803); neighbour(-22.0, 4804);
   // ================================================================== balcony
   const BX0 = -38.0, BX1 = -31.0, BZ0 = 15.55;
-  A.box(M.concrete, BX1 - BX0, 0.3, UNIT.z0 - BZ0, (BX0 + BX1) / 2, Y - 0.3, (UNIT.z0 + BZ0) / 2);
+  A.box(M.concrete, BX1 - BX0, 0.27, UNIT.z0 - BZ0, (BX0 + BX1) / 2, Y - 0.3, (UNIT.z0 + BZ0) / 2);     // top sits 3 cm under the deck boards (no coplanar z-fighting)
   const deck = pm('woodfloor', { color: 0x8a6a48, col2: 0x4a3423, p: [0.14, 1.2, 0, 0], wet: 1, rough: 0.7 });
   const deckMesh = new THREE.Mesh(new THREE.BoxGeometry(BX1 - BX0, 0.03, UNIT.z0 - BZ0), deck);
   deckMesh.position.set((BX0 + BX1) / 2, Y - 0.015, (UNIT.z0 + BZ0) / 2); deckMesh.receiveShadow = true; par.add(deckMesh);

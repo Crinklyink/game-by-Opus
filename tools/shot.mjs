@@ -30,6 +30,7 @@ try {
   const err = await page.evaluate(() => window.__bootError);
   if (err) logs.push('BOOT ERROR: ' + err);
   else {
+    if (process.env.EVAL) { const r = await page.evaluate(process.env.EVAL); fs.writeFileSync('.scratch/eval.txt', typeof r === 'string' ? r : JSON.stringify(r, null, 1)); }
     await page.evaluate((n) => window.__game.step(n), +frames);
     await page.screenshot({ path: out, timeout: 120000 });
     logs.push('info: ' + JSON.stringify(await page.evaluate(() => window.__game.info())));

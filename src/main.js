@@ -254,7 +254,7 @@ async function boot() {
   ui.setLoading(1, 'Ready');
 
   window.__game = {
-    G, game, player, camera, post, atmo, world, renderer, scene, audio, ui,
+    THREE, G, game, player, camera, post, atmo, world, renderer, scene, audio, ui,
     tp: (x, y, z, yaw = 0, pitch = 0, level) => { player.teleport(x, y - 1.68, z, yaw, level ?? (y > 100 ? 1 : 0)); player.pitch = pitch; player.eye = 1.68; },
     setTime: (h) => { G.time.hour = h; },
     setRain: (r) => { world.weatherSys.forced = r > 0.1 ? (r > 0.9 ? 'storm' : 'rain') : 'clear'; G.weather.target = G.weather.rain = r; G.weather.wet = r > 0.1 ? 1 : 0; },

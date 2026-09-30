@@ -155,6 +155,7 @@ uniform vec3 uCol2; uniform vec4 uP;
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   float pw = uP.x; float pl = uP.y;
   vec2 q = p.xz;
+  float aa = max(fwidth(q.x), fwidth(q.y));                       // pixel footprint on the boards (m)
   float row = floor(q.y / pw);
   float off = hash11(row * 7.13) * pl;
   float xx = q.x + off;
@@ -162,18 +163,21 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   float rnd = hash21(vec2(col, row));
   vec2 f = vec2(xx - col*pl, q.y - row*pw);
   float edge = min(min(f.x, pl - f.x), min(f.y, pw - f.y));
-  float gv = smoothstep(0.0, 0.0024, edge);
+  float gw = max(0.0024, aa * 1.3);                               // joints widen to a pixel, keeping their average darkness
+  float gv = smoothstep(0.0, gw, edge);
+  float dark = (1.0 - gv) * min(1.0, 0.0048 / gw);
+  float hf = 1.0 - smoothstep(0.01, 0.06, aa);                    // fine grain fades with distance instead of sparkling
   float g1 = nz(vec3(xx*0.22 + rnd*13.0, q.y*6.5, rnd*7.0)).r;
-  float g2 = nz(vec3(xx*0.9 + rnd*3.0, q.y*26.0, rnd*2.0+0.5)).b;
+  float g2 = mix(0.5, nz(vec3(xx*0.9 + rnd*3.0, q.y*26.0, rnd*2.0+0.5)).b, hf);
   float ring = fract(g1*7.5 + g2*1.3);
-  ring = smoothstep(0.0, 0.5, ring)*smoothstep(1.0, 0.55, ring);
+  ring = mix(0.5, smoothstep(0.0, 0.5, ring)*smoothstep(1.0, 0.55, ring), hf);
   float tone = mix(0.78, 1.14, hash21(vec2(col+0.3, row)*1.7));
   vec3 wood = mix(s.alb, uCol2, ring*0.55 + g2*0.2) * tone;
   float kn = nz(vec3(xx*1.5+rnd*30.0, q.y*11.0, rnd)).g;
-  wood *= 1.0 - smoothstep(0.88, 0.96, kn)*0.4;
-  s.alb = wood * (0.3 + 0.7*gv);
-  s.rough = mix(0.3, 0.46, g2) + (1.0-gv)*0.45;
-  s.h = (-(1.0-gv)*0.0016 + (ring-0.5)*0.00025 + (g2-0.5)*0.0002) * dfade(wp, 0.01);
+  wood *= 1.0 - smoothstep(0.88, 0.96, kn)*0.4*hf;
+  s.alb = wood * (1.0 - 0.7*dark);
+  s.rough = mix(0.3, 0.46, g2) + dark*0.45;
+  s.h = (-dark*0.0016 + (ring-0.5)*0.00025 + (g2-0.5)*0.0002) * dfade(wp, 0.01);
 }`,
 
   woodfurn: /* glsl */`

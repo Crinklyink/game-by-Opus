@@ -119,8 +119,8 @@ export class Atmosphere {
     u.uHorizon.value.setRGB(hor[0], hor[1], hor[2]);
     u.uSunCol.value.setRGB(k.sun[0], k.sun[1], k.sun[2]);
     u.uGlowCol.value.setRGB(k.glow[0], k.glow[1], k.glow[2]);
-    const cg = 0.032 * night * (1 + oc * 2.6);
-    u.uCityGlow.value.setRGB(0.9 * cg, 0.44 * cg, 0.2 * cg);
+    const cg = 0.03 * night * (1 + oc * 1.5);
+    u.uCityGlow.value.setRGB(0.82 * cg, 0.5 * cg, 0.3 * cg);
     u.uFogDen.value = 0.00082 + oc * 0.0017 + W.mist * 0.0011 + night * 0.0002;
     u.uLit.value = windowLitFraction(hour);
 
