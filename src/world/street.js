@@ -261,14 +261,21 @@ export function buildStreet(scene, glow, planar, ctx) {
   const emitters = [];
   const addLamp = (x, z, faceX, faceZ) => {
     const px = x, pz = z;
-    lampK.cyl(poleMat, 0.055, 0.1, 8.6, px, 0, pz, { seg: 10 });
-    lampK.cyl(poleMat, 0.14, 0.16, 0.5, px, 0, pz, { seg: 10 });
+    // pole: flared base skirt with bolts, tapered shaft with collars, hand-hole plate, mast arm on a truss
+    lampK.lathe(poleMat, [[0, 0], [0.22, 0], [0.24, 0.03], [0.18, 0.12], [0.12, 0.42], [0.1, 0.55], [0.0, 0.56]], px, 0, pz, { seg: 12 });
+    for (let i = 0; i < 4; i++) { const a = (i / 4) * Math.PI * 2 + 0.4; lampK.cyl(poleMat, 0.018, 0.018, 0.04, px + Math.cos(a) * 0.2, 0.02, pz + Math.sin(a) * 0.2, { seg: 6 }); }
+    lampK.cyl(poleMat, 0.05, 0.1, 8.6, px, 0.5, pz, { seg: 12 });
+    for (const yy of [1.4, 4.2, 7.6]) lampK.torus(poleMat, 0.075 - yy * 0.004, 0.012, px, yy, pz, { rx: Math.PI / 2, seg: 12, seg2: 5 });
+    lampK.box(poleMat, 0.012, 0.3, 0.16, px - faceX * 0.09 - 0.0, 1.0, pz - faceZ * 0.09, { ry: Math.atan2(faceX, faceZ) });
     const ax = px + faceX * 2.0, az = pz + faceZ * 2.0;
-    lampK.tube(poleMat, [[px, 8.4, pz], [px + faceX * 0.5, 9.05, pz + faceZ * 0.5], [ax, 9.05, az]], 0.035, { seg: 16, radial: 6 });
-    // head
+    lampK.tube(poleMat, [[px, 8.3, pz], [px + faceX * 0.5, 9.0, pz + faceZ * 0.5], [ax, 9.05, az]], 0.04, { seg: 16, radial: 8 });
+    lampK.strut(poleMat, [px, 7.6, pz], [px + faceX * 1.1, 8.85, pz + faceZ * 1.1], 0.016, 0.012, { seg: 6 });
+    // cobra-head luminaire: ribbed housing, drop lens, photocell
     const ang = Math.atan2(faceX, faceZ);
-    lampK.box(poleMat, 0.9, 0.13, 0.34, ax, 8.98, az, { ry: ang + Math.PI / 2, r: 0.03 });
-    out.lamps.push({ x: ax, y: 8.9, z: az });
+    lampK.sph(poleMat, 0.5, ax, 8.99, az, { sx: 0.95, sy: 0.15, sz: 0.5, ry: ang + Math.PI / 2, seg: 16, seg2: 8 });
+    lampK.box(poleMat, 0.86, 0.05, 0.36, ax, 8.9, az, { ry: ang + Math.PI / 2, r: 0.02 });
+    lampK.cyl(poleMat, 0.05, 0.05, 0.06, ax + faceX * 0.1, 9.1, az + faceZ * 0.1, { seg: 8 });
+    out.lamps.push({ x: ax, y: 8.9, z: az, px, pz, faceX, faceZ });
   };
   // avenue lamps (both sides, staggered), cross street lamps
   for (let x = -230; x <= 230; x += 34) {
@@ -280,6 +287,27 @@ export function buildStreet(scene, glow, planar, ctx) {
     if (Math.abs(z) < 16) continue;
     addLamp(9.0, z + 8, -1, 0);
     addLamp(-9.0, z - 9, 1, 0);
+  }
+  // overhead cables between neighbouring poles: they sag in catenaries and give every street view depth
+  { const wireM = pm('rubber', { color: 0x0c0d0e });
+    const lines = new Map();
+    for (const l of out.lamps) { const key = Math.abs(l.faceZ) > 0 ? 'x' + l.pz : 'z' + l.px; if (!lines.has(key)) lines.set(key, []); lines.get(key).push(l); }
+    for (const [key, arr] of lines) {
+      const alongX = key[0] === 'x';
+      arr.sort((a, b) => (alongX ? a.px - b.px : a.pz - b.pz));
+      for (let i = 0; i < arr.length - 1; i++) {
+        const A0 = arr[i], B0 = arr[i + 1], span = alongX ? B0.px - A0.px : B0.pz - A0.pz;
+        if (span > 40) continue;
+        for (const off of [-0.14, 0.0, 0.14]) {
+          const pts = [];
+          for (let j = 0; j <= 8; j++) {
+            const u = j / 8, sag = 0.85 * (1 - (2 * u - 1) ** 2);
+            pts.push(alongX ? [A0.px + (B0.px - A0.px) * u, 8.45 - sag - Math.abs(off) * 0.3, A0.pz + off] : [A0.px + off, 8.45 - sag - Math.abs(off) * 0.3, A0.pz + (B0.pz - A0.pz) * u]);
+          }
+          lampK.tube(wireM, pts, 0.008, { seg: 14, radial: 4 });
+        }
+      }
+    }
   }
   lampK.mesh(scene, { reflect: true });
   const heads = new Kit();
@@ -305,24 +333,40 @@ export function buildStreet(scene, glow, planar, ctx) {
   const bodyMat = pm('plastic', { color: 0x141516, rough: 0.5 });
   const lampKit = { A: new Kit(), B: new Kit(), pA: new Kit(), pB: new Kit() };
   const glowSig = [];
+  const visorMat = pm('plastic', { color: 0x101112, rough: 0.55, side: THREE.DoubleSide });
+  const yellowRefl = pm('plain', { color: 0xe6c21a, rough: 0.35 });
   const head = (kit, phaseMats, x, y, z, ry, sigId) => {
-    // black housing + 3 lamps (r, y, g) facing +z local, rotated by ry
-    sk.box(bodyMat, 0.32, 0.95, 0.26, x, y - 0.47, z, { ry, r: 0.02 });
-    sk.box(bodyMat, 0.38, 0.03, 0.34, x + Math.sin(ry) * 0.04, y + 0.03, z + Math.cos(ry) * 0.04, { ry });
+    // three stacked lamp modules with tunnel visors, a louvred backplate with a retro-reflective border, and bracket hardware
     const c = Math.cos(ry), s = Math.sin(ry);
+    const L = (mat, w, h, d, lx, ly, lz, o = {}) => sk.box(mat, w, h, d, x + lx * c + lz * s, ly, z - lx * s + lz * c, { ry, ...o });
+    L(yellowRefl, 0.74, 1.34, 0.014, 0, y - 1.13, 0.004);
+    L(bodyMat, 0.7, 1.3, 0.02, 0, y - 1.11, 0.02);
+    L(bodyMat, 0.32, 0.95, 0.24, 0, y - 0.95, -0.005, { r: 0.03 });
     ['r', 'y', 'g'].forEach((k2, i) => {
       const yy = y - 0.17 - i * 0.29;
+      L(bodyMat, 0.35, 0.285, 0.29, 0, yy - 0.14, 0.0, { r: 0.03 });
+      L(bodyMat, 0.3, 0.02, 0.05, 0, yy + 0.145, 0.16);
+      const vg = new THREE.CylinderGeometry(0.16, 0.16, 0.27, 18, 1, true, Math.PI / 2, Math.PI); vg.rotateX(Math.PI / 2);
+      sk.push(visorMat, vg, mat4(x + s * 0.27, yy + 0.025, z + c * 0.27, 0, ry, 0));
+      sk.torus(bodyMat, 0.128, 0.011, x + s * 0.145, yy, z + c * 0.145, { rx: 0, ry, seg: 20, seg2: 5 });
       const lx = x + s * 0.14, lz = z + c * 0.14;
       kit[k2 === 'r' ? 'r' : k2 === 'y' ? 'y' : 'g'].push({ x: lx, y: yy, z: lz, ry });
       glowSig.push({ x: lx + s * 0.06, y: yy, z: lz + c * 0.06, color: k2 === 'r' ? 0xff2418 : k2 === 'y' ? 0xffb000 : 0x22ff77, phase: sigId, k: k2 });
     });
+    L(bodyMat, 0.06, 0.22, 0.06, 0, y, -0.0, { r: 0.01 });                       // hanger stub above the head
+    L(bodyMat, 0.22, 0.05, 0.22, 0, y + 0.02, 0.0, { r: 0.01 });
   };
   const lampsA = { r: [], y: [], g: [] }, lampsB = { r: [], y: [], g: [] };
   const pedHeads = { A: { walk: [], hand: [] }, B: { walk: [], hand: [] } };
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     const px = sx * 8.3, pz = sz * 8.3;
-    sk.cyl(poleMat, 0.07, 0.09, 4.4, px, 0, pz, { seg: 10 });
-    sk.cyl(poleMat, 0.15, 0.17, 0.4, px, 0, pz, { seg: 10 });
+    sk.lathe(poleMat, [[0, 0], [0.2, 0], [0.21, 0.03], [0.16, 0.14], [0.1, 0.46], [0.085, 0.6], [0, 0.6]], px, 0, pz, { seg: 14 });
+    sk.cyl(poleMat, 0.065, 0.09, 4.6, px, 0.55, pz, { seg: 12 });
+    for (const yy of [1.5, 3.2, 4.3]) sk.torus(poleMat, 0.078 - yy * 0.002, 0.012, px, yy, pz, { rx: Math.PI / 2, seg: 12, seg2: 5 });
+    sk.sph(poleMat, 0.085, px, 5.2, pz, { seg: 12, seg2: 8 });
+    sk.box(poleMat, 0.012, 0.32, 0.17, px + (px > 0 ? 0.075 : -0.075), 0.9, pz, { ry: 0 });
+    sk.box(bodyMat, 0.14, 0.09, 0.1, px, 4.75, pz, { r: 0.015 });                                   // detector camera on top
+    sk.cyl(bodyMat, 0.032, 0.032, 0.08, px, 4.69, pz, { seg: 8 });
     // vehicle head for the avenue (faces -sx), on a short arm toward the road
     sk.tube(poleMat, [[px, 4.2, pz], [px, 4.5, pz - sz * 1.4], [px, 4.5, pz - sz * 3.0]], 0.045, { seg: 10, radial: 6 });
     head(lampsA, matsA, px, 4.75, pz - sz * 3.0, sx > 0 ? -Math.PI / 2 : Math.PI / 2, 'A');
@@ -335,16 +379,18 @@ export function buildStreet(scene, glow, planar, ctx) {
       const ox = which === 'A' ? sx * 0.0 : 0, oz = 0;
       const hx = px + (which === 'A' ? -sx * 0.4 : 0), hz = pz + (which === 'B' ? -sz * 0.4 : 0);
       const c2 = Math.cos(ry), s2 = Math.sin(ry);
-      sk.box(bodyMat, 0.34, 0.34, 0.16, hx, 2.6, hz, { ry, r: 0.02 });
-      pedHeads[which].hand.push({ x: hx + s2 * 0.085, y: 2.7, z: hz + c2 * 0.085, ry });
-      pedHeads[which].walk.push({ x: hx + s2 * 0.085, y: 2.5, z: hz + c2 * 0.085, ry });
+      sk.box(bodyMat, 0.36, 0.72, 0.17, hx, 2.2, hz, { ry, r: 0.025 });
+      for (const yy of [2.74, 2.4]) { const vg = new THREE.CylinderGeometry(0.0, 0.0, 0.01, 4); void vg; sk.box(bodyMat, 0.36, 0.028, 0.08, hx + s2 * 0.11, yy + 0.155, hz + c2 * 0.11, { ry }); }
+      sk.box(yellowRefl, 0.4, 0.76, 0.012, hx - s2 * 0.0, 2.18, hz - c2 * 0.0, { ry });
+      pedHeads[which].hand.push({ x: hx + s2 * 0.088, y: 2.74, z: hz + c2 * 0.088, ry });
+      pedHeads[which].walk.push({ x: hx + s2 * 0.088, y: 2.4, z: hz + c2 * 0.088, ry });
     }
     // beg button
     sk.box(pm('metal', { color: 0xd8b030, p: [0, 40, 0, 0] }), 0.12, 0.2, 0.05, px + (sx > 0 ? -0.09 : 0.09), 1.1, pz + (sz > 0 ? -0.09 : 0.09), {});
     addCollider(px - 0.15, px + 0.15, pz - 0.15, pz + 0.15, -1, 4.5, 0);
   }
   sk.mesh(scene, { reflect: true });
-  const lampGeo = new THREE.CircleGeometry(0.115, 20);
+  const lampGeo = new THREE.SphereGeometry(0.118, 22, 8, 0, Math.PI * 2, 0, Math.PI * 0.34); lampGeo.rotateX(Math.PI / 2); lampGeo.scale(1, 1, 0.55); lampGeo.translate(0, 0, -0.026);
   const addLamps = (mat, arr) => { arr.forEach((l) => { const m = new THREE.Mesh(lampGeo, mat); m.position.set(l.x, l.y, l.z); m.rotation.y = l.ry; scene.add(m); m.layers.enable(1); }); };
   addLamps(matsA.r, lampsA.r); addLamps(matsA.y, lampsA.y); addLamps(matsA.g, lampsA.g);
   addLamps(matsB.r, lampsB.r); addLamps(matsB.y, lampsB.y); addLamps(matsB.g, lampsB.g);

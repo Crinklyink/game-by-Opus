@@ -350,22 +350,42 @@ export function buildBurger(scene, glow, ctx) {
   K.torus(chromeS, 0.34, 0.03, 47.5, 3.55, z0 + 0.4, { seg: 40, seg2: 8 });
   K.mesh(par, { reflect: true });
   glassBox(par, 35, 0.85 + 1.35, z1 - 0.16, 30, 2.7, 'z');
-  // roof: big neon sign
+  // roof: big illuminated sign on the front parapet (readable from the street), with a stacked-burger icon on top
   const rk = new Kit();
-  rk.box(red, 20, 3.2, 0.5, 35, H + 0.2, -22, { r: 0.05 });
-  rk.box(pm('paint', { color: 0xf3f0e6, rough: 0.4 }), 20.4, 0.2, 0.6, 35, H + 3.35, -22);
-  rk.box(M.blackMetal, 0.3, 0.7, 0.3, 27, H, -22); rk.box(M.blackMetal, 0.3, 0.7, 0.3, 43, H, -22);
+  const ZS = -13.3, SY = H + 0.9;
+  const creamP = pm('paint', { color: 0xf3f0e6, rough: 0.4 });
+  rk.box(red, 20, 3.2, 0.5, 35, SY, ZS, { r: 0.12, seg: 3 });
+  rk.box(creamP, 20.5, 0.16, 0.62, 35, SY + 3.2, ZS, { r: 0.03 }); rk.box(creamP, 20.5, 0.16, 0.62, 35, SY - 0.16, ZS, { r: 0.03 });
+  for (const sx of [-1, 1]) rk.box(creamP, 0.16, 3.52, 0.62, 35 + sx * 10.17, SY - 0.16, ZS, { r: 0.03 });
+  const ledRim = pm('plain', { color: 0x050505, emissive: 0xfff0d0, emissiveI: 3 });
+  rk.box(ledRim, 19.8, 0.05, 0.05, 35, SY + 0.08, ZS + 0.27); rk.box(ledRim, 19.8, 0.05, 0.05, 35, SY + 3.07, ZS + 0.27);
+  for (const px of [27, 35, 43]) { rk.box(M.blackMetal, 0.32, 0.55, 0.32, px, H + 0.4, ZS, { r: 0.02 }); rk.box(M.blackMetal, 0.7, 0.05, 0.7, px, H + 0.4, ZS); }
+  for (const px of [26, 44]) { rk.strut(M.blackMetal, [px - 1.2, H + 0.4, ZS - 1.4], [px - 0.1, SY + 0.6, ZS - 0.15], 0.05, 0.05, { seg: 6 }); rk.strut(M.blackMetal, [px + 1.2, H + 0.4, ZS - 1.4], [px + 0.1, SY + 0.6, ZS - 0.15], 0.05, 0.05, { seg: 6 }); }
   rk.mesh(par, { reflect: true });
-  const signT = canvasTex(1024, 192, (c, w, h) => { c.fillStyle = '#b3241c'; c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.font = '900 110px "Arial Black", Impact'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.shadowColor = '#ffb000'; c.shadowBlur = 14; c.fillText('BIG STACK BURGERS', w / 2, h / 2 + 4); });
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(19.4, 3.0), new THREE.MeshBasicMaterial({ map: signT, toneMapped: false, color: new THREE.Color(1.5, 1.5, 1.5) }));
-  sign.position.set(35, H + 1.8, -21.74); par.add(sign); const sign2 = sign.clone(); sign2.rotation.y = Math.PI; sign2.position.z = -22.26; par.add(sign2);
-  // burger icon (stacked discs) on top
+  const signT = canvasTex(1024, 192, (c, w, h) => {
+    const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#c92c22'); g.addColorStop(1, '#9c1a14'); c.fillStyle = g; c.fillRect(0, 0, w, h);
+    c.strokeStyle = 'rgba(255,240,210,0.85)'; c.lineWidth = 5; c.strokeRect(14, 14, w - 28, h - 28);
+    let fs = 110; c.font = `900 ${fs}px "Arial Black", Impact`; while (c.measureText('BIG STACK BURGERS').width > w * 0.86 && fs > 40) { fs -= 4; c.font = `900 ${fs}px "Arial Black", Impact`; }
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.shadowColor = '#5a0a06'; c.shadowBlur = 0; c.shadowOffsetX = 5; c.shadowOffsetY = 6; c.fillStyle = '#5a0a06'; c.fillText('BIG STACK BURGERS', w / 2, h / 2 + 6);
+    c.shadowColor = '#ffb000'; c.shadowBlur = 16; c.shadowOffsetX = 0; c.shadowOffsetY = 0; c.fillStyle = '#fff6e0'; c.fillText('BIG STACK BURGERS', w / 2, h / 2 + 2);
+  });
+  const signMat = new THREE.MeshBasicMaterial({ map: signT, toneMapped: false, color: new THREE.Color(1.5, 1.5, 1.5) });
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(19.6, 3.0), signMat);
+  sign.position.set(35, SY + 1.6, ZS + 0.262); par.add(sign); const sign2 = sign.clone(); sign2.rotation.y = Math.PI; sign2.position.z = ZS - 0.262; par.add(sign2);
+  // burger icon on top: sesame bun, lettuce ruffle, tomato, cheese, patty, heel
   const burger = new Kit();
-  burger.cyl(pm('paint', { color: 0xd8963a, rough: 0.5 }), 1.5, 1.6, 0.5, 35, H + 3.45, -22, { seg: 28 });
-  burger.cyl(pm('paint', { color: 0x3a1c10, rough: 0.6 }), 1.55, 1.55, 0.3, 35, H + 3.95, -22, { seg: 28 });
-  burger.cyl(pm('paint', { color: 0x58a030, rough: 0.6 }), 1.65, 1.65, 0.12, 35, H + 4.25, -22, { seg: 28 });
-  burger.cyl(pm('paint', { color: 0xe83a2a, rough: 0.4 }), 1.6, 1.6, 0.14, 35, H + 4.37, -22, { seg: 28 });
-  burger.cyl(pm('paint', { color: 0xd8963a, rough: 0.5 }), 1.3, 1.6, 0.6, 35, H + 4.5, -22, { seg: 28 });
+  const bunM = pm('paint', { color: 0xd8963a, rough: 0.45, physical: true, clearcoat: 0.3, ccRough: 0.3 });
+  const by = SY + 3.36, bx = 35, bz = ZS;
+  burger.lathe(bunM, [[0, 0], [1.55, 0], [1.6, 0.1], [1.56, 0.3], [1.34, 0.44], [0, 0.46]], bx, by, bz, { seg: 32 });
+  burger.lathe(pm('paint', { color: 0x4a2412, rough: 0.7 }), [[0, 0], [1.68, 0], [1.72, 0.1], [1.72, 0.32], [1.64, 0.42], [0, 0.42]], bx, by + 0.46, bz, { seg: 32 });
+  burger.box(pm('paint', { color: 0xf2b820, rough: 0.35 }), 3.5, 0.07, 3.5, bx, by + 0.88, bz, { ry: Math.PI / 4 });
+  burger.torus(pm('paint', { color: 0x58a030, rough: 0.55 }), 1.72, 0.14, bx, by + 1.0, bz, { seg: 40, seg2: 8, rx: Math.PI / 2 });
+  burger.torus(pm('paint', { color: 0x6cb83a, rough: 0.55 }), 1.62, 0.1, bx, by + 1.06, bz, { seg: 36, seg2: 8, rx: Math.PI / 2 });
+  burger.cyl(pm('paint', { color: 0xe83a2a, rough: 0.35 }), 1.55, 1.55, 0.16, bx, by + 1.1, bz, { seg: 32 });
+  burger.lathe(bunM, [[0, 0], [1.6, 0], [1.72, 0.2], [1.66, 0.6], [1.32, 1.08], [0.66, 1.34], [0, 1.4]], bx, by + 1.28, bz, { seg: 32 });
+  const seed = pm('paint', { color: 0xf6e8c0, rough: 0.5 });
+  for (let i = 0; i < 46; i++) { const a = i * 2.399, r = 0.15 + Math.sqrt((i + 0.5) / 46) * 1.15, y = by + 1.28 + 1.4 * (1 - (r / 1.72) ** 2.2) * 0.98 + 0.02; burger.sph(seed, 0.07, bx + Math.cos(a) * r, y, bz + Math.sin(a) * r, { sy: 0.5, seg: 6, seg2: 4, ry: a }); }
   burger.mesh(par, {});
   // lights
   const em = (x, y, z, c, i, d) => LightPool.add({ pos: new THREE.Vector3(x, y, z), color: c, intensity: i, distance: d, levelY: 0, levelRange: 12, zone: 'burger' });
@@ -531,7 +551,7 @@ export function buildGrocery(scene, glow, ctx) {
   // neon-ish exterior sign
   const fasc = canvasTex(1024, 128, (c, w, h) => { c.fillStyle = '#2a8f4a'; c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.font = '900 84px "Arial Black", Arial'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('FRESHMART', w / 2, h / 2 + 3); });
   const fm = new THREE.Mesh(new THREE.PlaneGeometry(14, 1.2), new THREE.MeshBasicMaterial({ map: fasc, toneMapped: false, color: new THREE.Color(1.5, 1.5, 1.5) })); fm.position.set(41, 4.4, z0 - 0.37); fm.rotation.y = Math.PI; par.add(fm);
-  fm.rotation.y = 0; fm.position.z = z0 - 0.37;
+  fm.rotation.y = Math.PI; fm.position.z = z0 - 0.37;
   // parking lot behind (z 42..104), painted stalls
   const lotMat = pm('asphaltLot', { color: 0xffffff, p: [18, 52, 46, 0], wet: 1 });
   const lot = new THREE.Mesh(new THREE.PlaneGeometry(46, 60), lotMat); lot.rotation.x = -Math.PI / 2; lot.position.set(41, GY + 0.008, 72); lot.receiveShadow = true; lot.layers.enable(1); par.add(lot);

@@ -19,6 +19,7 @@ import * as streetMod from './world/street.js';
 import { buildBlocks } from './world/blocks.js';
 import { buildProps } from './world/props.js';
 import { Traffic } from './world/traffic.js';
+import { buildShopExteriors } from './world/exteriors.js';
 import { People } from './world/people.js';
 import { Weather } from './world/weather.js';
 import { buildApartment } from './world/apartment.js';
@@ -128,7 +129,7 @@ async function boot() {
   await step(0.56, 'Starting traffic', async () => { W.traffic = new Traffic(scene, glow, q, {}); G.traffic = W.traffic; });
   await step(0.66, 'Furnishing the apartment', async () => { W.apt = buildApartment(scene, { rand: rng(99), glow }); G.apt = W.apt; });
   await step(0.76, 'Installing the elevator', async () => { W.elevator = buildElevator(scene); G.elevator = W.elevator; W.lobby = buildLobby(scene, { rand: rng(31) }); });
-  await step(0.84, 'Opening the shops', async () => { W.shops = { burger: buildBurger(scene, glow, { rand: rng(51) }), grocery: buildGrocery(scene, glow, { rand: rng(52) }) }; });
+  await step(0.84, 'Opening the shops', async () => { W.shops = { burger: buildBurger(scene, glow, { rand: rng(51) }), grocery: buildGrocery(scene, glow, { rand: rng(52) }) }; W.exteriors = buildShopExteriors(scene, glow, W.shops); });
   await step(0.88, 'Baking the interior light volumes', async () => {
     G.heights.push({ cx: -40, cz: 40, w: 40, d: 40, h: 169, y0: 0 });     // Meridian Tower itself
     bakeHeights(); log('city height map:', FAR.boxes, 'buildings');
@@ -210,6 +211,7 @@ async function boot() {
     world.elevator.update(dt);
     world.lobby.update(dt);
     world.shops.grocery.update(dt);
+    world.exteriors.update(dt);
     world.upgrades.update(elapsed);
     updateScreens(dt, elapsed);
     { const zn = game.zone ? game.zone.name : 'apartment'; LightPool.zone = (zn === 'apartment' || zn === 'balcony') ? 'apartment' : (zn === 'park' || zn === 'street') ? 'street' : zn;

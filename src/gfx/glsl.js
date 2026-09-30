@@ -314,7 +314,7 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
 }`,
 
   brick: /* glsl */`
-uniform vec3 uCol2;
+uniform vec3 uCol2; uniform vec4 uP;      // uP.x > 0.5: painted brick (a mural: the paint covers the mortar too)
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   vec2 uv = abs(n.x) > abs(n.z) ? p.zy : p.xy;
   float bw = 0.215, bh = 0.065, mj = 0.0105;
@@ -327,11 +327,20 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   float mx = smoothstep(0.0, aw, f.x)*smoothstep(0.0, aw, bw-f.x);
   float my = smoothstep(0.0, aw, f.y)*smoothstep(0.0, aw, bh-f.y);
   float b = mx*my;
-  float r = hash21(cell);
-  vec3 bc = mix(s.alb, uCol2, r) * (0.82 + 0.3*nz(p*9.0).r) * (0.9 + 0.2*nz(p*44.0).g);
-  s.alb = mix(vec3(0.42,0.4,0.37)*(0.8+0.3*nz(p*20.0).r), bc, b);
-  s.rough = 0.88;
-  s.h = (-(1.0-b)*0.003 + nz(p*38.0).r*0.0007) * dfade(wp, 0.01);
+  float e = min(min(f.x, bw-f.x), min(f.y, bh-f.y));                       // distance to the brick's edge: arrises are slightly worn
+  float r = hash21(cell), r2 = hash21(cell + 17.3);
+  float painted = step(0.5, uP.x);
+  vec3 base = mix(mix(s.alb, uCol2, r), s.alb, painted);
+  vec3 bc = base * (0.82 + 0.3*nz(p*9.0).r) * (0.9 + 0.2*nz(p*44.0).g);
+  bc *= 1.0 - 0.32*step(0.93, r2)*(1.0 - painted);                       // the odd over-fired, darker brick
+  bc *= 1.0 + 0.1*(1.0 - smoothstep(0.0, 0.006, e)) * 0.6;
+  float sootN = nz(vec3(uv.x*2.3, uv.y*0.16, 0.37)).r;
+  float grime = smoothstep(1.1, 0.0, wp.y) * (0.45 + 0.55*nz(p*vec3(3.0,1.2,3.0)).g) + smoothstep(0.62, 0.9, sootN)*0.22;
+  bc *= 1.0 - 0.3*grime*(1.0 - 0.7*painted);
+  vec3 mortar = mix(vec3(0.27,0.255,0.235)*(0.8+0.3*nz(p*20.0).r), s.alb*0.62, painted) * (1.0 - 0.25*grime);
+  s.alb = mix(mortar, bc, b);
+  s.rough = mix(0.94, 0.84, b) - 0.12*painted;
+  s.h = (-(1.0-b)*0.003 + (smoothstep(0.0, 0.004, e) - 1.0)*0.0006 + (r - 0.5)*0.0005 + nz(p*38.0).r*0.0007) * dfade(wp, 0.01);
 }`,
 
   paint: /* glsl */`
