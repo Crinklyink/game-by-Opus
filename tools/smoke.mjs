@@ -1,0 +1,24 @@
+// Non-test smoke: real title screen -> New game click -> a few seconds of the live rAF loop.
+import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
+const server = http.createServer((req, res) => { const p = decodeURIComponent(new URL(req.url, 'http://x').pathname); const f = path.join(root, p === '/' ? 'index.html' : p); fs.readFile(f, (e, d) => { if (e) { res.writeHead(404); res.end(); } else { res.writeHead(200, { 'Content-Type': types[path.extname(f)] || 'application/octet-stream' }); res.end(d); } }); });
+await new Promise((r) => server.listen(0, r));
+const port = server.address().port;
+const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--use-gl=angle', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'] });
+const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
+const logs = []; page.on('console', (m) => { if (m.type() === 'error') logs.push(m.text().slice(0, 300)); }); page.on('pageerror', (e) => logs.push('pageerror ' + e.message));
+await page.goto(`http://localhost:${port}/index.html`);
+await page.waitForFunction(() => window.__ready || window.__bootError, null, { timeout: 240000 });
+console.log('boot error:', await page.evaluate(() => window.__bootError));
+await page.waitForSelector('#title .menu .btn', { timeout: 60000 });
+console.log('title buttons:', await page.$$eval('#title .menu .btn', (b) => b.map((x) => x.textContent.trim())));
+await page.screenshot({ path: '.scratch/smoke_title.png', timeout: 120000 });
+await page.click('#title [data-a=new]');
+await page.waitForTimeout(6000);
+const st = await page.evaluate(() => { const g = window.__game; return { started: g.ui.started, hour: +g.G.time.hour.toFixed(2), frames: g.frames(), pos: g.player.pos.toArray().map((v) => +v.toFixed(1)), hud: !g.ui.el.hud.classList.contains('hidden') }; });
+console.log('after start:', JSON.stringify(st));
+await page.screenshot({ path: '.scratch/smoke_game.png', timeout: 120000 });
+console.log(logs.length ? 'console errors:\n' + logs.join('\n') : 'no console errors');
+await browser.close(); server.close();
