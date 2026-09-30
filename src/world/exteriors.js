@@ -423,7 +423,7 @@ export function buildShopExteriors(scene, glow, shops) {
     }
     addCollider(x0, x1, z0 - 0.3, z0, 0, H + 0.4, 0);
     // front: stainless corner posts and a neon rim under the sign band
-    { const Wf = new Wall(K, x1, z1, 0, 1, x1 - x0);
+    { const Wf = new Wall(K, x0, z1, 0, 1, x1 - x0);
       Wf.box(steel, 0, 0.12, -0.06, H - 0.2, 0, 0.14, { r: 0.02 }); Wf.box(steel, Wf.len - 0.12, Wf.len, -0.06, H - 0.2, 0, 0.14, { r: 0.02 });
       Wf.tube(neonTeal, [[2.2, 4.12, 0.28], [Wf.len - 2.2, 4.12, 0.28]], 0.022, { seg: 2, radial: 8 });
     }
