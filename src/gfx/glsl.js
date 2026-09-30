@@ -358,12 +358,12 @@ vec2 vor2(vec2 x, out vec2 id){
   id = mg; return vec2(sqrt(md), 0.0);
 }
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
-  vec2 id; vec2 d = vor2(p.xz*9.0, id);
-  float chip = smoothstep(0.42, 0.36, d.x);
+  vec2 id; vec2 d = vor2(p.xz*24.0, id);
+  float chip = smoothstep(0.48, 0.40, d.x);
   float rc = hash21(id);
   vec3 cc = rc < 0.33 ? vec3(0.62,0.6,0.56) : (rc < 0.66 ? vec3(0.2,0.2,0.22) : uCol2);
   float lg = smoothstep(0.30, 0.58, nz(p*0.9).r);
-  s.alb = mix(s.alb*(0.94+0.08*nz(p*6.0).r), cc, chip*0.85);
+  s.alb = mix(s.alb*(0.94+0.08*nz(p*6.0).r), mix(s.alb, cc, 0.6), chip*0.8);
   s.rough = 0.18 + 0.08*nz(p*12.0).b;
   s.h = 0.0;
 }`,

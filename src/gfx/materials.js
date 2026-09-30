@@ -42,7 +42,7 @@ vec3 bumpN(vec3 pos, vec3 N, vec2 dH, float fd){
   return normalize(abs(det) * N - grad);
 }`;
 
-export function patchMaterial(shader, procSrc, uni, extra = '') {
+export function patchMaterial(shader, procSrc, uni, extra = '', vert = null) {
   for (const k of SHARED) shader.uniforms[k] = G.u[k];
   shader.uniforms.uScale = uni.uScale;
   shader.uniforms.uP = uni.uP;
@@ -53,6 +53,13 @@ export function patchMaterial(shader, procSrc, uni, extra = '') {
   shader.vertexShader = shader.vertexShader
     .replace('#include <common>', '#include <common>\n' + VERT_HEAD)
     .replace('#include <project_vertex>', '#include <project_vertex>\n' + VERT_INJECT);
+
+  if (vert) {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\n' + (vert.head || ''))
+      .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + (vert.normal || ''))
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + (vert.begin || ''));
+  }
 
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', `#include <common>

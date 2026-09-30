@@ -8,7 +8,7 @@ import { facadeMaterial, facadeBoxGeometry } from '../gfx/facade.js';
 import { COMMON, SKY } from '../gfx/glsl.js';
 import { pm } from '../gfx/materials.js';
 
-const NEAR = new Set(['-1,0', '0,0', '0,-1', '-1,-1']);
+const isCustom = (i, j) => i >= -3 && i <= 2 && j >= -3 && j <= 2;
 const DOWNTOWN = { x: 40, z: -860 };
 
 const GLASS_TINTS = [0x4b8196, 0x38607a, 0x7a6a4e, 0x5d6870, 0x407a68, 0x5670a0, 0x6a7d88];
@@ -100,7 +100,7 @@ export function buildSkyline(scene, glow, q) {
 
   const N = 13;
   for (let i = -N; i < N; i++) for (let j = -N; j < N; j++) {
-    if (NEAR.has(`${i},${j}`)) continue;
+    if (isCustom(i, j)) continue;
     const bx0 = i * P + STREET_W / 2 + 1, bz0 = j * P + STREET_W / 2 + 1, bs = P - STREET_W - 2;
     const cx = bx0 + bs / 2, cz = bz0 + bs / 2;
     const dist = Math.hypot(cx, cz);

@@ -120,7 +120,7 @@ void main(){
     vec2 c = (uv - 0.5) * 2.0;
     float w = exp(-dot(c, c) * 1.6);
     vec3 col = texture(tMip, uv).rgb;
-    float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
+    float l = clamp(dot(col, vec3(0.2126, 0.7152, 0.0722)), 0.0, 2.2);
     sum += w * log(max(l, 1e-3)); wsum += w;
   }
   float avg = exp(sum / wsum);

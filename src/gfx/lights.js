@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { G } from '../core/G.js';
 
 export class LightPool {
+  static zone = 'street';
   constructor(scene, count) {
     this.slots = [];
     for (let i = 0; i < count; i++) {
@@ -37,7 +38,9 @@ export class LightPool {
       const dx = e.pos.x - cam.x, dy = e.pos.y - cam.y, dz = e.pos.z - cam.z;
       const d2 = dx * dx + dy * dy + dz * dz;
       if (d2 > (e.distance * 3.5) ** 2 && d2 > 900) continue;
-      e._score = e.intensity * e.k * e.priority / (d2 + 6);
+      const ez = e.zone || 'street', cz = LightPool.zone;
+      const zk = ez === cz ? (ez === 'street' ? 1 : 8) : (ez !== 'street' ? 0.12 : (cz === 'street' ? 1 : 0.2));
+      e._score = e.intensity * e.k * e.priority * zk / (d2 + 6);
       cands.push(e);
     }
     cands.sort((a, b) => b._score - a._score);

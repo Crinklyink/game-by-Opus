@@ -42,7 +42,7 @@ export function buildApartment(scene, ctx) {
   scene.add(par);
   const out = { groups: {}, doors: [], curtains: [], screens: [], group: par };
 
-  const emit = (o) => LightPool.add({ levelY: Y, levelRange: 12, ...o });
+  const emit = (o) => LightPool.add({ levelY: Y, levelRange: 12, zone: 'apartment', ...o });
   const groups = out.groups;
   for (const n of ['living', 'dining', 'kitchen', 'office', 'bedroom', 'bath', 'hall', 'shelf']) groups[n] = makeGroup(n);
   const LS = 0.55;
@@ -247,6 +247,7 @@ export function buildApartment(scene, ctx) {
   gEmit(groups.dining, { pos: new THREE.Vector3(-35.6, Y + 2.0, 23.2), color: 0xffcf98, intensity: 60, distance: 8 });
   // kitchen
   const K = buildKitchen(par, Y, { rand: R });
+  out.kitchen = K;
   retarget(K.group, groups.kitchen, M);
   const kBulb = M.bulb.clone(); groups.kitchen.mats.push({ mat: kBulb, on: 7, off: 0 }); kBulb.emissiveIntensity = 7;
   const kMats = { ...M, bulb: kBulb };
@@ -303,8 +304,8 @@ export function buildApartment(scene, ctx) {
   gEmit(groups.bath, { pos: new THREE.Vector3(-45.5, Y + 3.1, 30.7), color: 0xfff2e0, intensity: 36, distance: 7 });
   // hall lights
   const hallBulb = M.led.clone(); groups.hall.mats.push({ mat: hallBulb, on: 4.5, off: 0.0 });
-  gEmit(groups.hall, { pos: new THREE.Vector3(-30, Y + 3.2, 34.5), color: 0xffe2b8, intensity: 70, distance: 10, levelRange: 14 });
-  gEmit(groups.hall, { pos: new THREE.Vector3(-23.5, Y + 3.2, 34.5), color: 0xffe2b8, intensity: 70, distance: 10, levelRange: 14 });
+  gEmit(groups.hall, { pos: new THREE.Vector3(-30, Y + 3.2, 34.5), color: 0xffe2b8, intensity: 70, distance: 10, levelRange: 14, zone: 'hall' });
+  gEmit(groups.hall, { pos: new THREE.Vector3(-23.5, Y + 3.2, 34.5), color: 0xffe2b8, intensity: 70, distance: 10, levelRange: 14, zone: 'hall' });
 
   // ================================================================== doors
   const doors = out.doors;
