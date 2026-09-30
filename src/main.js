@@ -129,7 +129,6 @@ async function boot() {
     bk.box(stone, 0.4, 7, 40, -59.8, 0, 40); bk.box(stone, 0.4, 7, 40, -20.2, 0, 40); bk.box(stone, 40, 7, 0.4, -40, 0, 59.8);
     bk.mesh(scene, { reflect: true });
     addCollider(-340, 340, -345, -335, -1, 400, 0); addCollider(-340, 340, 335, 345, -1, 400, 0); addCollider(-345, -335, -340, 340, -1, 400, 0); addCollider(335, 345, -340, 340, -1, 400, 0);
-    addCollider(-60, -20, 20, 60, -1, 8, 0);      // the tower's solid base (the lobby door colliders open a way in)
   });
 
   // ---------------------------------------------------------------- player + systems

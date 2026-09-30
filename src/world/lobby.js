@@ -42,10 +42,10 @@ export function buildLobby(scene, ctx) {
   A.cyl(stone, 2.85, 2.85, 0.018, -38, 0, 28.2, { seg: 64 });
   for (const [x0, x1, z0, z1] of [[X0, X1, Z0, Z0 + 0.25], [X0, X1, Z1 - 0.25, Z1], [X0, X0 + 0.25, Z0, Z1], [X1 - 0.25, X1, Z0, Z1]]) A.box(darkStone, x1 - x0, 0.01, z1 - z0, (x0 + x1) / 2, 0, (z0 + z1) / 2);
   // walls: west, east, south (elevator opening at x -27.1..-24.9)
-  box(lobbyWall, X0 - 0.3, X0, Z0, Z1 + 0.3, 0, H);
-  box(lobbyWall, X1, X1 + 0.3, Z0, Z1 + 0.3, 0, H);
-  box(lobbyWall, X0, -27.1, Z1, Z1 + 0.3, 0, H);
-  box(lobbyWall, -24.9, X1, Z1, Z1 + 0.3, 0, H);
+  box(lobbyWall, X0 - 0.3, X0, 0, H, Z0, Z1 + 0.3);
+  box(lobbyWall, X1, X1 + 0.3, 0, H, Z0, Z1 + 0.3);
+  box(lobbyWall, X0, -27.1, 0, H, Z1, Z1 + 0.3);
+  box(lobbyWall, -24.9, X1, 0, H, Z1, Z1 + 0.3);
   A.box(lobbyWall, 2.2, H - 2.45, 0.3, -26.0, 2.45, Z1 + 0.15);
   // slat feature wall on the south wall (west half), backlit
   A.box(warmPanel, 21.5, H - 0.4, 0.02, (X0 + (-30.3)) / 2 + 0.0, 0.2, Z1 - 0.06);
@@ -55,14 +55,14 @@ export function buildLobby(scene, ctx) {
     A.box(slat, 0.07, H - 0.4, 0.09, x, 0.2, Z1 - 0.12, { r: 0.006 });
   }
   A.box(M.brass, 21.7, 0.04, 0.1, (X0 + -30.2) / 2, 0.16, Z1 - 0.12);
-  // glass front: mullions + transom, doors at x -41.3..-38.7
+  // glass front: mullions + transom, doors at x -41.4..-38.6
   const glassBays = 10;
-  for (let i = 0; i <= glassBays; i++) { const x = X0 + i * ((X1 - X0) / glassBays); A.box(M.blackMetal, 0.09, H - 0.16, 0.18, x, 0.0, Z0 - 0.02, { r: 0.006 }); }
+  const dx0 = -41.4, dx1 = -38.6;
+  for (let i = 0; i <= glassBays; i++) { const x = X0 + i * ((X1 - X0) / glassBays); if (x > dx0 - 0.1 && x < dx1 + 0.1) continue; A.box(M.blackMetal, 0.09, H - 0.16, 0.18, x, 0.0, Z0 - 0.02, { r: 0.006 }); }
   A.box(M.blackMetal, X1 - X0, 0.12, 0.2, (X0 + X1) / 2, 3.5, Z0 - 0.02);
   A.box(M.blackMetal, X1 - X0, 0.15, 0.2, (X0 + X1) / 2, 0, Z0 - 0.02);
   A.box(M.blackMetal, X1 - X0, 0.18, 0.24, (X0 + X1) / 2, H - 0.34, Z0 - 0.02);
   // door frame (heavier) around the sliding doors
-  const dx0 = -41.4, dx1 = -38.6;
   A.box(M.steel, 0.14, 3.5, 0.24, dx0 - 0.07, 0, Z0 - 0.02); A.box(M.steel, 0.14, 3.5, 0.24, dx1 + 0.07, 0, Z0 - 0.02); A.box(M.steel, dx1 - dx0 + 0.28, 0.14, 0.24, -40, 3.36, Z0 - 0.02);
   // canopy over the entrance
   A.box(M.blackMetal, 8, 0.22, 3.6, -40, 4.15, Z0 - 1.9, { r: 0.01 });
@@ -86,7 +86,7 @@ export function buildLobby(scene, ctx) {
     c.clearRect(0, 0, w, h); c.fillStyle = '#e8c27a'; c.font = '600 72px "Times New Roman", serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.letterSpacing = '22px'; c.fillText('MERIDIAN TOWER', w / 2, h / 2);
   });
-  const signMat = new THREE.MeshStandardMaterial({ map: sign, transparent: true, metalness: 0.9, roughness: 0.3, emissive: 0xffc070, emissiveMap: sign, emissiveIntensity: 0.9 });
+  const signMat = new THREE.MeshStandardMaterial({ map: sign, transparent: true, metalness: 0.35, roughness: 0.35, emissive: 0xffc070, emissiveMap: sign, emissiveIntensity: 1.7 });
   const sm = new THREE.Mesh(new THREE.PlaneGeometry(6.0, 0.75), signMat);
   sm.position.set(-44.6, 3.6, Z1 - 0.19); sm.rotation.y = Math.PI; par.add(sm);
   // seating group (west)
@@ -138,13 +138,20 @@ export function buildLobby(scene, ctx) {
   // ---------------- lobby windows (glass pane, static transparent) ----------------
   const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xaac0c8, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false, envMapIntensity: 2.2, clearcoat: 1, clearcoatRoughness: 0.02 });
   const gw = (X1 - X0) / glassBays;
+  const fa = dx0 - 0.14, fb = dx1 + 0.14;            // door frame edges: glass stops here
   for (let i = 0; i < glassBays; i++) {
-    const cx = X0 + gw * (i + 0.5);
-    if (cx > dx0 - 0.5 && cx < dx1 + 0.5) continue;
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(gw - 0.1, H - 0.5), glassMat);
-    m.position.set(cx, (H - 0.5) / 2 + 0.15, Z0 - 0.02); par.add(m);
-    F.colBox && addCollider(cx - gw / 2, cx + gw / 2, Z0 - 0.1, Z0 + 0.06, 0, H, 0);
+    const a0 = X0 + gw * i, b0 = a0 + gw;
+    for (const [a, b] of [[a0, Math.min(b0, fa)], [Math.max(a0, fb), b0]]) {
+      if (b - a < 0.1) continue;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(b - a - 0.1, H - 0.5), glassMat);
+      m.position.set((a + b) / 2, (H - 0.5) / 2 + 0.15, Z0 - 0.02); par.add(m);
+      addCollider(a, b, Z0 - 0.1, Z0 + 0.06, 0, H, 0);
+    }
   }
+  // the rest of the tower's ground floor is solid mass around the lobby
+  addCollider(-60, X0 - 0.3, 20, 60, -1, H + 1, 0);
+  addCollider(X1 + 0.3, -20, 20, 60, -1, H + 1, 0);
+  addCollider(-60, -20, Z1 + 0.3, 60, -1, H + 1, 0);
   const transom = new THREE.Mesh(new THREE.PlaneGeometry(dx1 - dx0 + 0.2, H - 3.5 - 0.5), glassMat);
   transom.position.set(-40, 3.5 + (H - 3.5 - 0.5) / 2 + 0.1, Z0 - 0.02); par.add(transom);
   // sliding doors: two glass leaves

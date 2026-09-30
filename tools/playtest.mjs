@@ -31,6 +31,26 @@ await step('elevator down', async () => {
   if (r.lvl !== 0 || Math.abs(r.y) > 0.5) throw new Error('did not arrive');
   await shot('03_lobby');
 });
+await step('walk in through the lobby door + back out', async () => {
+  const r = await ev(() => {
+    const g = window.__game; const out = {};
+    g.tp(-39.6, 1.7, 17.2, 3.14159, 0, 0); g.simulate(2, 0.05);
+    g.key('KeyW', true); g.simulate(70, 0.05); g.key('KeyW', false);
+    out.inside = [+g.player.pos.x.toFixed(2), +g.player.pos.z.toFixed(2)];
+    g.tp(-39.6, 1.7, 30, 0, 0, 0); g.simulate(2, 0.05);
+    g.key('KeyW', true); g.simulate(90, 0.05); g.key('KeyW', false);
+    out.outside = [+g.player.pos.x.toFixed(2), +g.player.pos.z.toFixed(2)];
+    // and the tower's side walls must hold
+    g.tp(-62, 1.7, 40, -Math.PI / 2, 0, 0); g.simulate(2, 0.05);
+    g.key('KeyW', true); g.simulate(40, 0.05); g.key('KeyW', false);
+    out.west = [+g.player.pos.x.toFixed(2), +g.player.pos.z.toFixed(2)];
+    return out;
+  });
+  console.log('     doorway ->', JSON.stringify(r));
+  if (!(r.inside[1] > 24)) throw new Error('could not walk into the lobby');
+  if (!(r.outside[1] < 19.5)) throw new Error('could not walk out of the lobby');
+  if (!(r.west[0] < -59.5)) throw new Error('walked into the tower wall');
+});
 await step('walk out to street', async () => { await ev(() => { const g = window.__game; g.tp(-40, 1.7, 26, 3.14159 - 3.14159, 0, 0); g.simulate(4, 0.05); }); await shot('04_out'); });
 await step('burger order', async () => { const r = await ev(async () => { const g = window.__game; g.tp(35, 1.7, -26.5, 0, 0, 0); g.game.state.hunger = 20; g.game.openBurger(); g.step(1); const d = g.game.state.cash; g.game.orderBurger([{ id: 'classic', name: 'Classic', hunger: 45, energy: 3, n: 1, price: 8.5 }], 8.5, 'take'); return { d, cash: g.game.state.cash, meals: g.game.state.meals.length }; }); if (r.meals !== 1) throw new Error(JSON.stringify(r)); await shot('05_burger'); await ev(() => window.__game.ui.close(false)); });
 await step('grocery basket + pay', async () => { const r = await ev(() => { const g = window.__game; const S = g.game.state; S.basket = { eggs: 1, cheese: 1, pasta: 1, sauce: 1 }; g.game.payGroceries(20); g.game.storeGroceries(); return S.pantry; }); if (!r.eggs) throw new Error(JSON.stringify(r)); });
