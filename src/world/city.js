@@ -8,6 +8,8 @@ import { facadeMaterial, facadeBoxGeometry } from '../gfx/facade.js';
 import { COMMON, SKY } from '../gfx/glsl.js';
 import { pm } from '../gfx/materials.js';
 
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+const mergeTanks = (parts) => { for (const g of parts) for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k); return mergeGeometries(parts, false); };
 const isCustom = (i, j) => i >= -3 && i <= 2 && j >= -3 && j <= 2;
 const DOWNTOWN = { x: 40, z: -860 };
 
@@ -49,7 +51,12 @@ export function buildSkyline(scene, glow, q) {
   }
   const pickTint = (style) => style === 0 ? GLASS_TINTS[Math.floor(R() * GLASS_TINTS.length)] : style === 3 ? BRICK_TINTS[Math.floor(R() * BRICK_TINTS.length)] : CONCRETE_TINTS[Math.floor(R() * CONCRETE_TINTS.length)];
 
+  const tanks = [];
   function roofStuff(list, cx, cz, w, d, top, tall) {
+    if (list === near && !tall && w > 14 && d > 14) {            // rooftop water tanks on the near mid-rise
+      const nt = R() < 0.45 ? 1 + Math.floor(R() * 3) : 0;
+      for (let k = 0; k < nt; k++) tanks.push({ x: cx + (R() - 0.5) * (w - 8), y: top, z: cz + (R() - 0.5) * (d - 8), s: 1.6 + R() * 1.6, c: R() });
+    }
     const n = 1 + Math.floor(R() * 3);
     for (let k = 0; k < n; k++) {
       const mw = 3 + R() * Math.min(12, w * 0.3), md = 3 + R() * Math.min(12, d * 0.3), mh = 2 + R() * 4;
@@ -159,6 +166,21 @@ export function buildSkyline(scene, glow, q) {
   makeMesh(near, true);
   makeMesh(far, false);
 
+  // rooftop water tanks: a wooden barrel on a steel stand under a conical lid, one instanced mesh for the whole skyline
+  if (tanks.length) {
+    const parts = [];
+    const cyl = (r0, r1, h, y, seg = 12) => { const g = new THREE.CylinderGeometry(r1, r0, h, seg, 1, false); g.translate(0, y + h / 2, 0); return g.toNonIndexed(); };
+    parts.push(cyl(1.0, 1.0, 1.5, 1.05));
+    parts.push(cyl(1.02, 1.02, 0.07, 1.4)); parts.push(cyl(1.02, 1.02, 0.07, 2.1));
+    parts.push(cyl(1.0, 0.05, 0.6, 2.55));
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; const g = new THREE.CylinderGeometry(0.05, 0.05, 1.1, 5); g.translate(Math.cos(a) * 0.85, 0.55, Math.sin(a) * 0.85); parts.push(g.toNonIndexed()); }
+    const mg = mergeTanks(parts);
+    const im = new THREE.InstancedMesh(mg, pm('woodfurn', { color: 0x9a7a54, col2: 0x4a3423, p: [1, 0, 0, 0], wet: 1 }), tanks.length);
+    const m4 = new THREE.Matrix4(), c = new THREE.Color();
+    tanks.forEach((t, i) => { m4.compose(new THREE.Vector3(t.x, t.y, t.z), new THREE.Quaternion(), new THREE.Vector3(t.s, t.s, t.s)); im.setMatrixAt(i, m4); im.setColorAt(i, c.setHSL(0.07 + t.c * 0.03, 0.28, 0.32 + t.c * 0.16)); });
+    im.castShadow = true; im.receiveShadow = true; im.matrixAutoUpdate = false; im.updateMatrix(); im.computeBoundingSphere(); im.layers.enable(1);
+    scene.add(im); meshes.push(im);
+  }
   // aircraft warning lights
   beacons.forEach((b, i) => glow.add(b.x, b.y, b.z, 0xff2410, 9, 0.9, 1.7 + (i % 5) * 0.11, (i * 0.37) % 1));
 

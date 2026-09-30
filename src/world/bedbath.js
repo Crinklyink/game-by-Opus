@@ -86,9 +86,9 @@ export function buildDresser(par, y0, x, z, ry) {
   }
   // round mirror on the wall above, brass frame with a bevelled glass
   const mm = pm('plain', { color: 0xdfe6ea, metal: 1, rough: 0.02, interior: true });
-  k.torus(M.brass, 0.42, 0.014, 0, 1.55, -0.2, { rx: 0, seg: 64, seg2: 8 });
-  k.torus(M.brass, 0.405, 0.005, 0, 1.55, -0.202, { rx: 0, seg: 64, seg2: 5 });
-  k.cyl(mm, 0.41, 0.41, 0.006, 0, 1.55, -0.2, { rx: Math.PI / 2, cy: true, seg: 64 });
+  k.torus(M.brass, 0.42, 0.014, 0, 1.55, -0.222, { rx: 0, seg: 64, seg2: 8 });
+  k.torus(M.brass, 0.405, 0.005, 0, 1.55, -0.212, { rx: 0, seg: 64, seg2: 5 });
+  k.cyl(mm, 0.41, 0.41, 0.006, 0, 1.55, -0.222, { rx: Math.PI / 2, cy: true, seg: 64 });
   // tray with perfumes, jewellery box, framed photo, small plant
   k.box(M.marbleD, 0.34, 0.015, 0.22, -0.4, 0.82, 0.0, { r: 0.004 });
   k.box(M.brass, 0.35, 0.02, 0.005, -0.4, 0.83, 0.11);

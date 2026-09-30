@@ -100,6 +100,16 @@ vec3 skyColor(vec3 rd){
     ccol += vec3(0.7,0.75,1.0) * uFlash * 0.6;
     col = mix(col, ccol, c * smoothstep(-0.02, 0.10, y) * (0.92));
   }
+  if (uDisk < 0.5) {                        // environment capture only: reflections should see a dark ground and a skyline, not endless haze
+    float az = atan(rd.z, rd.x);
+    float sk = 0.04 + 0.12 * nz(vec3(az * 1.3, 0.2, 0.5)).r + 0.05 * nz(vec3(az * 7.0, 0.7, 0.2)).g + 0.025 * step(0.72, nz(vec3(az * 23.0, 0.1, 0.3)).b);
+    float building = smoothstep(sk + 0.012, sk - 0.012, y) * step(0.0, y);
+    vec3 bcol = mix(hz, vec3(0.05, 0.055, 0.065), 0.72) * 0.55 + uCityGlow * 6.0;
+    col = mix(col, bcol, building);
+    float gr = smoothstep(0.0, -0.06, y);
+    vec3 gcol = vec3(0.06, 0.062, 0.068) * (0.4 + 0.6 * (1.0 - uNight)) + hz * 0.06 + uCityGlow * 3.0;
+    col = mix(col, gcol, gr);
+  }
   return col;
 }
 
@@ -330,6 +340,18 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   s.h = (nz(p*45.0).b - 0.5)*0.00008*dfade(wp,0.003);
 }`,
 
+  bark: /* glsl */`
+void surf(vec3 p, vec3 n, vec3 wp, inout S s){
+  float a = atan(p.z, p.x);
+  float r1 = nz(vec3(a * 2.4, p.y * 0.32, 0.31)).r, r2 = nz(vec3(a * 7.0, p.y * 0.9, 0.7)).g;
+  float ridge = smoothstep(0.32, 0.68, r1 * 0.65 + r2 * 0.45);
+  float lichen = smoothstep(0.66, 0.85, nz(vec3(p.x * 3.0, p.y * 0.8, p.z * 3.0)).b);
+  s.alb *= (0.42 + 0.78 * ridge) * (1.0 - lichen * 0.15) + vec3(0.03, 0.05, 0.02) * lichen;
+  s.rough = 0.92;
+  s.h = (ridge - 0.5) * 0.014 * dfade(wp, 0.02);
+  s.ao = 0.55 + 0.45 * ridge;
+}`,
+
   book: /* glsl */`
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   // p = unit-box local space of an instanced book (x across the spine, y up 0..1, z through the thickness)
@@ -346,6 +368,26 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   s.alb = mix(s.alb, vec3(0.86, 0.82, 0.72) * (0.9 + 0.1 * nz(p * 60.0).r), clamp(pages, 0.0, 1.0));
   s.rough = mix(0.55, 0.85, pages);
   s.h = (nz(p * 40.0).g - 0.5) * 0.0004 * dfade(wp, 0.005) - (lab + band) * 0.0003;
+}`,
+
+  carpaint: /* glsl */`
+uniform vec4 uP;                                           // x,y: door seams (m along the car), z: bonnet line, w: boot line
+void surf(vec3 p, vec3 n, vec3 wp, inout S s){
+  float fp = length(fwidth(p.xz)) + 1e-4;
+  float aw = max(0.0035, fp);
+  float side = smoothstep(0.55, 0.8, abs(p.z) / 0.9);
+  float low = step(p.y, 1.32);
+  float seam = 0.0;
+  seam = max(seam, smoothstep(aw, 0.0, abs(p.x - uP.x) - 0.0022) * low * side);
+  seam = max(seam, smoothstep(aw, 0.0, abs(p.x - uP.y) - 0.0022) * low * side);
+  seam = max(seam, smoothstep(aw, 0.0, abs(p.x - uP.z) - 0.0022) * step(0.6, n.y + 0.4 * side));
+  seam = max(seam, smoothstep(aw, 0.0, abs(p.x - uP.w) - 0.0022) * step(0.6, n.y + 0.4 * side));
+  float sill = smoothstep(aw, 0.0, abs(p.y - 0.37) - 0.002) * side;                        // rocker line
+  float crease = smoothstep(0.02 + aw, 0.0, abs(p.y - 0.86)) * side;                        // shoulder highlight
+  float flake = nz(p * 90.0).g;
+  s.alb *= (1.0 - 0.8 * max(seam, sill)) * (1.0 + 0.12 * crease) * (0.94 + 0.12 * flake);
+  s.rough = mix(s.rough, 0.6, max(seam, sill));
+  s.h = (-max(seam, sill) * 0.0018 + (flake - 0.5) * 0.00006) * dfade(wp, 0.004);
 }`,
 
   rubber: /* glsl */`

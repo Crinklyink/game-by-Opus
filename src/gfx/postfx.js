@@ -130,6 +130,27 @@ void main(){
   gl_FragColor = vec4(prev + (target - prev) * (1.0 - exp(-uDt * rate)), 0.0, 0.0, 1.0);
 }`;
 
+const RAYS_FRAG = /* glsl */`
+uniform sampler2D tDepth; uniform vec2 uSun; uniform vec3 uSunCol; uniform float uAspect, uIntensity;
+varying vec2 vUv;
+float hh(vec2 p){ vec3 p3 = fract(vec3(p.xyx)*.1031); p3 += dot(p3, p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
+void main(){
+  vec2 toSun = uSun - vUv;
+  float dist = length(toSun * vec2(uAspect, 1.0));
+  const int N = 30;
+  vec2 stepV = toSun / float(N) * 0.92;
+  vec2 uv = vUv + stepV * hh(gl_FragCoord.xy);
+  float acc = 0.0, w = 1.0;
+  for (int i = 0; i < N; i++) {
+    uv += stepV;
+    float onScreen = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+    float sky = step(0.99999, texture(tDepth, clamp(uv, 0.001, 0.999)).x) * onScreen;
+    acc += sky * w; w *= 0.955;
+  }
+  float fall = exp(-dist * 1.6) * smoothstep(0.0, 0.02, dist);
+  gl_FragColor = vec4(uSunCol * (acc / float(N)) * fall * uIntensity, 1.0);
+}`;
+
 const DOF_FRAG = /* glsl */`
 uniform sampler2D tColor; uniform sampler2D tDepth; uniform mat4 uProjInv; uniform vec2 uTexel;
 uniform float uFocus, uAperture, uMaxCoc; uniform int uTaps;
@@ -168,9 +189,9 @@ void main(){
 }`;
 
 const FINAL_FRAG = /* glsl */`
-uniform sampler2D tColor, tBloom, tAO, tExposure;
+uniform sampler2D tColor, tBloom, tAO, tExposure, tRays;
 uniform vec2 uTexel;
-uniform float uBloomI, uAOAmt, uTime, uFade, uSat, uVig, uGrain, uCA, uContrast, uSharp, uExposureBias, uWarm, uFlash;
+uniform float uBloomI, uAOAmt, uTime, uFade, uSat, uVig, uGrain, uCA, uContrast, uSharp, uExposureBias, uWarm, uFlash, uRaysOn;
 varying vec2 vUv;
 vec3 aces(vec3 x){ const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14; return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0); }
 vec3 toSRGB(vec3 c){ return mix(c*12.92, 1.055*pow(c, vec3(1.0/2.4)) - 0.055, step(vec3(0.0031308), c)); }
@@ -194,6 +215,7 @@ void main(){
   float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
   col *= mix(1.0, ao, uAOAmt / (1.0 + lum*0.5));
   col += texture(tBloom, uv).rgb * uBloomI;
+  if (uRaysOn > 0.5) col += texture(tRays, uv).rgb;
   float ex = texture(tExposure, vec2(0.5)).r * uExposureBias;
   col *= ex;
   col += vec3(0.6,0.7,1.0) * uFlash * 0.05;
@@ -217,7 +239,7 @@ export class PostFX {
   constructor(renderer, q) {
     this.r = renderer;
     this.quad = new FullScreenQuad(null);
-    this.fx = { fade: 0, sat: 1.0, vig: 0.28, grain: 0.022, ca: 0.0035, contrast: 0.22, warm: 0, bloom: 0.07, exposureBias: 1, aoAmt: 0.85, focus: 8, aperture: 1.0 };
+    this.fx = { fade: 0, sat: 1.0, vig: 0.28, grain: 0.022, ca: 0.0035, contrast: 0.22, warm: 0, bloom: 0.07, exposureBias: 1, aoAmt: 0.85, focus: 8, aperture: 1.0, rays: 0.22 };
     this.size = new THREE.Vector2(1280, 720);
     this.focus = 8;
     this.first = true;
@@ -236,18 +258,19 @@ export class PostFX {
       blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
     });
     this.mExpo = fsMat(EXPO_FRAG, u({ tMip: { value: null }, tPrev: { value: null }, uDt: { value: 0.016 }, uMin: { value: 0.35 }, uMax: { value: 3 }, uKey: { value: 0.2 }, uUp: { value: 1.6 }, uDown: { value: 3.0 } }));
+    this.mRays = fsMat(RAYS_FRAG, u({ tDepth: { value: null }, uSun: { value: new THREE.Vector2(0.5, 0.5) }, uSunCol: { value: new THREE.Color(1, 1, 1) }, uAspect: { value: 1.78 }, uIntensity: { value: 0 } }));
     this.mDof = fsMat(DOF_FRAG, u({ tColor: { value: null }, tDepth: { value: null }, uProjInv: { value: new THREE.Matrix4() }, uTexel: { value: new THREE.Vector2() }, uFocus: { value: 8 }, uAperture: { value: 1 }, uMaxCoc: { value: 0.004 }, uTaps: { value: 24 } }));
     this.mFinal = fsMat(FINAL_FRAG, u({
       tColor: { value: null }, tBloom: { value: null }, tAO: { value: null }, tExposure: { value: null }, uTexel: { value: new THREE.Vector2() },
       uBloomI: { value: 0.07 }, uAOAmt: { value: 0.8 }, uTime: { value: 0 }, uFade: { value: 0 }, uSat: { value: 1 }, uVig: { value: 0.3 }, uGrain: { value: 0.02 },
-      uCA: { value: 0.003 }, uContrast: { value: 0.2 }, uSharp: { value: 0 }, uExposureBias: { value: 1 }, uWarm: { value: 0 }, uFlash: { value: 0 },
+      uCA: { value: 0.003 }, uContrast: { value: 0.2 }, uSharp: { value: 0 }, uExposureBias: { value: 1 }, uWarm: { value: 0 }, uFlash: { value: 0 }, tRays: { value: null }, uRaysOn: { value: 0 },
     }));
     this.mFxaa = new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.clone(FXAAShader.uniforms), vertexShader: VERT, fragmentShader: FXAAShader.fragmentShader, depthTest: false, depthWrite: false });
     this.mBlack = new THREE.MeshBasicMaterial({ color: 0x000000 });
   }
 
   dispose() {
-    for (const k of ['rtScene', 'rtRefract', 'rtAO', 'rtAO2', 'rtA', 'rtLDR', 'rtE0', 'rtE1']) if (this[k]) { this[k].dispose(); this[k] = null; }
+    for (const k of ['rtScene', 'rtRefract', 'rtAO', 'rtAO2', 'rtA', 'rtLDR', 'rtE0', 'rtE1', 'rtRays']) if (this[k]) { this[k].dispose(); this[k] = null; }
     if (this.mips) this.mips.forEach((m) => m.dispose());
     this.mips = null;
   }
@@ -284,6 +307,7 @@ export class PostFX {
       this.mips.push(new THREE.WebGLRenderTarget(Math.max(2, mw), Math.max(2, mh), base));
       mw >>= 1; mh >>= 1;
     }
+    if (q.godrays) this.rtRays = new THREE.WebGLRenderTarget(Math.max(64, iw >> 1), Math.max(64, ih >> 1), base);
     if (q.dof) this.rtA = new THREE.WebGLRenderTarget(iw, ih, base);
     if (q.fxaa) this.rtLDR = new THREE.WebGLRenderTarget(w, h, { ...base, type: THREE.UnsignedByteType });
     const ex = { ...base, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter };
@@ -342,6 +366,24 @@ export class PostFX {
       aoTex = this.rtAO.texture;
     }
 
+    // 3b. crepuscular rays: march from every pixel toward the sun through the open sky (depth == far)
+    let raysOn = 0;
+    if (q.godrays && this.rtRays && opts.rays !== false) {
+      const sd = G.u.uSunDir.value, v = this._sv || (this._sv = new THREE.Vector3());
+      v.set(sd.x, sd.y, sd.z).transformDirection(camera.matrixWorldInverse);
+      const day = (1 - G.u.uNight.value) * (1 - 0.85 * G.u.uCloudCov.value);
+      const low = 1.0 - Math.min(1, Math.max(0, (sd.y - 0.05) / 0.6)) * 0.55;     // a low sun throws stronger shafts
+      const vis = Math.min(1, Math.max(0, (-v.z - 0.02) / 0.3));
+      const I = (fx.rays ?? 0.22) * day * low * vis * Math.min(1, Math.max(0, sd.y * 6 + 0.3));
+      if (I > 0.004) {
+        const px = camera.projectionMatrix.elements[0] * v.x / -v.z, py = camera.projectionMatrix.elements[5] * v.y / -v.z;
+        const m = this.mRays.uniforms;
+        m.tDepth.value = this.depthTex; m.uSun.value.set(px * 0.5 + 0.5, py * 0.5 + 0.5); m.uAspect.value = iw / ih; m.uIntensity.value = I;
+        m.uSunCol.value.copy(G.u.uSunCol.value);
+        this.pass(this.mRays, this.rtRays);
+        raysOn = 1;
+      }
+    }
     // 4. bloom: downsample chain
     const mips = this.mips;
     let src = this.rtScene.texture, sw = iw, sh = ih;
@@ -387,6 +429,7 @@ export class PostFX {
     f.uFade.value = fx.fade; f.uSat.value = fx.sat; f.uVig.value = fx.vig; f.uGrain.value = fx.grain; f.uCA.value = fx.ca;
     f.uContrast.value = fx.contrast; f.uSharp.value = this.scale < 0.98 ? 0.6 : 0.0; f.uExposureBias.value = fx.exposureBias; f.uWarm.value = fx.warm;
     f.uFlash.value = G.weather.flash;
+    f.uRaysOn.value = raysOn; f.tRays.value = this.rtRays ? this.rtRays.texture : null;
     if (q.fxaa && this.rtLDR) {
       this.pass(this.mFinal, this.rtLDR);
       const a = this.mFxaa.uniforms;

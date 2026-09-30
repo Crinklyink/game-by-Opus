@@ -116,6 +116,42 @@ export function diningChair(k, M, x, z, ry) {
   for (const [mat, arr] of kk.g) for (const geo of arr) k.push(mat, geo.clone(), mat4(x, 0, z, 0, ry, 0));
 }
 
+// ------------------------------------------------------------------ outdoor
+export function bistroChair(k, M, x, z, ry) {
+  const kk = new Kit();
+  for (const sx of [-1, 1]) {
+    kk.strut(M.blackMetal, [sx * 0.2, 0.44, 0.19], [sx * 0.235, 0, 0.27], 0.009, 0.007, { seg: 8 });
+    kk.strut(M.blackMetal, [sx * 0.2, 0.44, -0.19], [sx * 0.225, 0, -0.28], 0.009, 0.007, { seg: 8 });
+    kk.strut(M.blackMetal, [sx * 0.2, 0.44, -0.19], [sx * 0.23, 0.93, -0.27], 0.009, 0.009, { seg: 8 });
+    kk.strut(M.blackMetal, [sx * 0.2, 0.44, -0.19], [sx * 0.2, 0.44, 0.19], 0.008, 0.008, { seg: 6 });
+    kk.strut(M.blackMetal, [sx * 0.225, 0.2, 0.15], [sx * 0.225, 0.2, -0.17], 0.006, 0.006, { seg: 6 });
+  }
+  for (let i = 0; i < 6; i++) kk.box(M.oak, 0.45, 0.02, 0.06, 0, 0.44, 0.17 - i * 0.07, { r: 0.004 });
+  for (let i = 0; i < 4; i++) kk.box(M.oak, 0.43, 0.06, 0.018, 0, 0.6 + i * 0.09, -0.21 - i * 0.014, { r: 0.004, rx: -0.13 });
+  for (const [mat, arr] of kk.g) for (const geo of arr) k.push(mat, geo.clone(), mat4(x, 0, z, 0, ry, 0));
+}
+
+export function bistroTable(k, M, x, z) {
+  k.lathe(M.blackMetal, [[0, 0.69], [0.36, 0.69], [0.375, 0.695], [0.38, 0.71], [0.375, 0.725], [0.36, 0.73], [0, 0.73]], x, 0, z, { seg: 40 });
+  for (let i = 0; i < 6; i++) k.box(M.blackMetal, 0.004, 0.006, 0.7, x, 0.7, z, { ry: (i / 6) * Math.PI });
+  k.cyl(M.blackMetal, 0.028, 0.03, 0.66, x, 0.03, z, { seg: 12 });
+  for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2 + 0.5; k.strut(M.blackMetal, [x, 0.06, z], [x + Math.cos(a) * 0.26, 0.0, z + Math.sin(a) * 0.26], 0.014, 0.009, { seg: 8 }); }
+  k.lathe(M.blackMetal, [[0, 0.02], [0.09, 0.02], [0.1, 0.04], [0, 0.05]], x, 0, z, { seg: 16 });
+}
+
+// candle lantern: brass frame, glass panes, flame
+export function lantern(k, M, x, y, z, s = 1) {
+  const glassM = palette().glass;
+  k.box(M.blackMetal, 0.2 * s, 0.014 * s, 0.2 * s, x, y, z, { r: 0.003 });
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) k.cyl(M.blackMetal, 0.006 * s, 0.006 * s, 0.32 * s, x + sx * 0.093 * s, y, z + sz * 0.093 * s, { seg: 6 });
+  k.box(M.blackMetal, 0.22 * s, 0.014 * s, 0.22 * s, x, y + 0.32 * s, z, { r: 0.003 });
+  k.cyl(M.blackMetal, 0.06 * s, 0.09 * s, 0.05 * s, x, y + 0.334 * s, z, { seg: 8 });
+  k.torus(M.blackMetal, 0.05 * s, 0.005 * s, x, y + 0.395 * s, z, { rx: 0, seg: 12, seg2: 5 });
+  k.box(glassM, 0.18 * s, 0.3 * s, 0.18 * s, x, y + 0.015 * s, z);
+  k.cyl(pm('plain', { color: 0xf1ead8, rough: 0.6, interior: true }), 0.03 * s, 0.03 * s, 0.14 * s, x, y + 0.02 * s, z, { seg: 10 });
+  k.cyl(M.flame, 0.006 * s, 0.01 * s, 0.03 * s, x, y + 0.165 * s, z, { seg: 6 });
+}
+
 // ------------------------------------------------------------------ tables
 const cover = (c) => pm('paint', { color: c, rough: 0.55, interior: true });
 const GLASS = () => palette().glass;

@@ -123,7 +123,7 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
     float jd = (1.0 - jm) * min(1.0, 0.03 / jw);
     float tone = hash21(gid);
     vec3 base = plaza ? vec3(0.145, 0.133, 0.122) : vec3(0.155, 0.153, 0.147);
-    col = base * (0.74 + 0.5*tone) * (0.78 + 0.44*n1) * (0.9 + 0.2*n2);
+    col = base * (0.8 + 0.4*tone) * (0.8 + 0.4*n1) * (0.92 + 0.16*n2);
     float slabFix = step(0.9, hash21(gid + 17.0));                                   // occasional replaced slab: newer, paler
     col = mix(col, vec3(0.24, 0.235, 0.225) * (0.9 + 0.2*n2), slabFix);
     vec2 sl = (gf - 0.5) * gsz;

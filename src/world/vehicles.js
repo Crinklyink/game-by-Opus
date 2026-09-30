@@ -204,14 +204,15 @@ export class CarType {
     const S = SPECS[name];
     this.name = name; this.S = S; this.cap = capacity; this.n = 0;
     const { parts, wheels } = buildParts(name, S);
-    const paint = pm('paint', { color: 0xffffff, rough: 0.28, metal: 0.45, physical: true, clearcoat: 1, ccRough: 0.04, wet: 1, side: THREE.DoubleSide });
+    const seamX = [S.seatX[0] * 0.9 - 0.45, S.seatX[1] - 0.45, S.glass[S.glass.length - 1][0] - 0.02, S.glass[0][0] + 0.02];
+    const paint = pm('carpaint', { color: 0xffffff, rough: 0.2, metal: 0.78, physical: true, clearcoat: 1, ccRough: 0.025, wet: 1, side: THREE.DoubleSide, p: seamX });
     const trimM = pm('plastic', { color: 0x101112, rough: 0.5, wet: 1 });
     const chromeM = pm('plain', { color: 0xd8dade, metal: 1, rough: 0.12 });
-    const glassM = pm('plain', { color: 0x05080b, metal: 0.55, rough: 0.05, physical: true, clearcoat: 1, ccRough: 0.02, side: THREE.DoubleSide });
+    const glassM = pm('plain', { color: 0x030507, metal: 0.72, rough: 0.035, physical: true, clearcoat: 1, ccRough: 0.015, side: THREE.DoubleSide });
     const archM = pm('plain', { color: 0x040404, rough: 0.95 });
     const inM = pm('plain', { color: 0x1a1b1e, rough: 0.9 });
     const tireM = pm('rubber', { color: 0x141414, wet: 0.6 });
-    const rimM = pm('metal', { color: 0xc9cdd2, p: [2, 80, 0, 0], rough: 0.3 });
+    const rimM = pm('metal', { color: 0x8d9298, p: [2, 80, 0, 0], rough: 0.28 });
     const discM = pm('plain', { color: 0x5b5d61, metal: 1, rough: 0.5 });
     const lightBasic = (c) => new THREE.MeshBasicMaterial({ color: c, toneMapped: false });
     const headM = lightBasic(new THREE.Color(4, 3.8, 3.2)), tailM = lightBasic(new THREE.Color(2.4, 0.08, 0.05)), brakeM = lightBasic(new THREE.Color(5, 0.1, 0.06));

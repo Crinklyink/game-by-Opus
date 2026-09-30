@@ -164,7 +164,7 @@ export function buildApartment(scene, ctx) {
   // ================================================================== balcony
   const BX0 = -38.0, BX1 = -31.0, BZ0 = 15.55;
   A.box(M.concrete, BX1 - BX0, 0.27, UNIT.z0 - BZ0, (BX0 + BX1) / 2, Y - 0.3, (UNIT.z0 + BZ0) / 2);     // top sits 3 cm under the deck boards (no coplanar z-fighting)
-  const deck = pm('woodfloor', { color: 0x8a6a48, col2: 0x4a3423, p: [0.14, 1.2, 0, 0], wet: 1, rough: 0.7 });
+  const deck = pm('woodfloor', { color: 0x8a6a48, col2: 0x4a3423, p: [0.14, 1.2, 0, 0], wet: 1, rough: 0.7, sdf: true });
   const deckMesh = new THREE.Mesh(new THREE.BoxGeometry(BX1 - BX0, 0.03, UNIT.z0 - BZ0), deck);
   deckMesh.position.set((BX0 + BX1) / 2, Y - 0.015, (UNIT.z0 + BZ0) / 2); deckMesh.receiveShadow = true; par.add(deckMesh);
   // glass railings with steel posts + top rail
@@ -181,17 +181,16 @@ export function buildApartment(scene, ctx) {
   // balcony furniture: bistro table + 2 chairs + planters + string lights
   const BK = new Kit();
   const bx = -34.4, bz = 17.5;
-  BK.cyl(M.blackMetal, 0.38, 0.38, 0.025, bx, 0.7, bz, { seg: 32 });
-  BK.cyl(M.blackMetal, 0.03, 0.03, 0.7, bx, 0, bz, { seg: 10 });
-  BK.cyl(M.blackMetal, 0.24, 0.26, 0.02, bx, 0, bz, { seg: 24 });
-  for (const s of [-1, 1]) {
-    const cx = bx + s * 0.75, cz = bz;
-    BK.box(M.oak, 0.44, 0.04, 0.42, cx, 0.44, cz, { r: 0.01 });
-    BK.box(M.oak, 0.44, 0.34, 0.03, cx, 0.5, cz + (s > 0 ? 0 : 0) - 0.19, { r: 0.008 });
-    for (const dx of [-1, 1]) for (const dz of [-1, 1]) BK.cyl(M.blackMetal, 0.011, 0.011, 0.44, cx + dx * 0.19, 0, cz + dz * 0.18, { seg: 6 });
-  }
+  F.bistroTable(BK, M, bx, bz);
+  F.bistroChair(BK, M, bx - 0.75, bz, -Math.PI / 2 + 0.12); F.bistroChair(BK, M, bx + 0.72, bz + 0.05, Math.PI / 2 - 0.1);
+  // a side stool with a lantern, and a candle lantern on the deck
+  BK.cyl(M.oak, 0.17, 0.17, 0.035, -31.9, 0.44, 18.9, { seg: 24 });
+  for (let i = 0; i < 3; i++) { const a2 = i * 2.094; BK.strut(M.blackMetal, [-31.9 + Math.cos(a2) * 0.1, 0.44, 18.9 + Math.sin(a2) * 0.1], [-31.9 + Math.cos(a2) * 0.16, 0, 18.9 + Math.sin(a2) * 0.16], 0.01, 0.007, { seg: 6 }); }
+  F.lantern(BK, M, -31.9, 0.475, 18.9, 1);
+  F.lantern(BK, M, -37.35, 0.0, 19.3, 2.0);
+  BK.cyl(M.blackMetal, 0.014, 0.014, 0.4, bx, 0.7, bz, { seg: 6 });
   BK.lathe(M.ceramic, [[0, 0], [0.05, 0], [0.06, 0.1], [0.05, 0.11], [0.048, 0.01]], bx, 0.725, bz);
-  const planterMat = pm('concrete', { color: 0xb9b6ae, p: [0, 0, 0, 0], wet: 1 });
+  const planterMat = pm('concrete', { color: 0xb9b6ae, p: [0, 0, 0, 0], wet: 1, sdf: true });
   for (const px of [-37.55, -31.5]) {
     BK.box(planterMat, 0.55, 0.55, 0.4, px, 0, 16.0, { r: 0.02 });
     BK.box(M.soil, 0.5, 0.02, 0.36, px, 0.54, 16.0);
@@ -199,6 +198,9 @@ export function buildApartment(scene, ctx) {
   const balc = F.finish(par, BK, 0, Y, 0, 0);
   F.monstera(par, Y + 0.55, -37.55, 16.0, 0.9, 21);
   const sk = new Kit(); F.snakePlant(sk, M, -31.5, Y + 0.55, 16.0, 4, 1.3); F.finish(par, sk, 0, 0, 0, 0);
+  gEmit(groups.living, { pos: new THREE.Vector3(-31.9, Y + 0.65, 18.9), color: 0xffc27a, intensity: 10, distance: 3.5 });
+  gEmit(groups.living, { pos: new THREE.Vector3(-37.35, Y + 0.7, 19.3), color: 0xffc27a, intensity: 14, distance: 4 });
+  gEmit(groups.living, { pos: new THREE.Vector3(-34.5, Y + 2.7, 18.0), color: 0xffcf98, intensity: 40, distance: 7 });
   // string lights along the back (bulbs)
   const bulbGeo = new THREE.SphereGeometry(0.035, 8, 6);
   const sl = new THREE.InstancedMesh(bulbGeo, pm('plain', { color: 0x050505, emissive: 0xffc47a, emissiveI: 9 }), 14);
@@ -329,7 +331,7 @@ export function buildApartment(scene, ctx) {
   retarget(BED.group, groups.bedroom, M);
   BED.lampPos.forEach((p) => gEmit(groups.bedroom, { pos: p, color: 0xffb870, intensity: 32, distance: 6 }));
   gEmit(groups.bedroom, { pos: new THREE.Vector3(-45.5, Y + 2.3, 25.0), color: 0xffe0c0, intensity: 15, distance: 10 });
-  buildDresser(par, Y, -42.24, 25.9, -Math.PI / 2);
+  buildDresser(par, Y, -42.34, 25.9, -Math.PI / 2);
   buildWardrobe(par, Y, -47.6, 28.59, Math.PI, 2.6);
   const RC = buildReadingCorner(par, Y, -43.3, 21.95);
   retarget(RC.lamp.group, groups.bedroom, M);
@@ -350,7 +352,17 @@ export function buildApartment(scene, ctx) {
   const mkDoor = (o) => {
     const k = new Kit();
     const w = o.w, h = 2.4, t = 0.045;
-    k.box(o.mat ?? M.walnut, w, h, t, w / 2, 0, 0, { r: 0.004 });
+    const dm = o.mat ?? M.walnut;
+    k.box(dm, w, h, t, w / 2, 0, 0, { r: 0.004 });
+    // raised panel mouldings on both faces (two panels)
+    for (const fs of [1, -1]) {
+      const zf = fs * (t / 2 + 0.005), mw = 0.028;
+      for (const [py, ph] of [[1.42, 0.82], [0.24, 1.0]]) {
+        const pw = w - 0.36;
+        k.box(dm, pw, mw, 0.012, w / 2, py, zf, { r: 0.002 }); k.box(dm, pw, mw, 0.012, w / 2, py + ph - mw, zf, { r: 0.002 });
+        k.box(dm, mw, ph - 2 * mw, 0.012, w / 2 - pw / 2 + mw / 2, py + mw, zf, { r: 0.002 }); k.box(dm, mw, ph - 2 * mw, 0.012, w / 2 + pw / 2 - mw / 2, py + mw, zf, { r: 0.002 });
+      }
+    }
     k.box(M.brass, 0.14, 0.03, 0.06, w - 0.09, 1.02, 0, { r: 0.006 });
     k.cyl(M.brass, 0.012, 0.012, 0.07, w - 0.05, 1.02, 0.03, { rx: Math.PI / 2, cy: true, seg: 10 });
     if (o.peep) { k.cyl(M.brass, 0.008, 0.008, 0.02, w / 2, 1.55, 0.02, { rx: Math.PI / 2, cy: true, seg: 8 }); k.box(M.brass, 0.1, 0.06, 0.01, w / 2, 1.9, 0.024); }
@@ -441,5 +453,5 @@ export function buildApartment(scene, ctx) {
 
 function artwork_bedroom(par, Y, M) {
   F.artwork(par, -48.94, Y + 1.05, 21.6, Math.PI / 2, 0.7, 0.9, 2, 'black');
-  F.artwork(par, -42.12, Y + 1.05, 24.8, -Math.PI / 2, 1.0, 0.7, 0, 'brass');
+  F.artwork(par, -42.115, Y + 1.05, 24.8, -Math.PI / 2, 1.0, 0.7, 0, 'brass');
 }

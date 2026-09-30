@@ -5,6 +5,7 @@ import { G } from '../core/G.js';
 import { rng, clamp } from '../core/util.js';
 import { Kit, addCollider, mat4 } from './kit.js';
 import { pm, patchMaterial, VERT } from '../gfx/materials.js';
+import { pullBar } from './shapes.js';
 import { canvasTex } from '../gfx/noise.js';
 import { PROC } from '../gfx/glsl.js';
 import { LightPool } from '../gfx/lights.js';
@@ -141,7 +142,20 @@ export function buildProps(scene, glow, ctx) {
   const ground = groundMaterial(G.planar.uniforms);
 
   // ---------------------------------------------------------------- trees
-  const trunkGeo = new THREE.CylinderGeometry(0.1, 0.19, 4.4, 8, 3); trunkGeo.translate(0, 2.2, 0);
+  // trunk with a root flare and six limbs reaching into the crown (one shared geometry for every tree)
+  const trunkGeo = (() => {
+    const parts = [];
+    const add = (g) => { g = g.index ? g.toNonIndexed() : g; for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k); parts.push(g); };
+    const t = new THREE.CylinderGeometry(0.1, 0.17, 4.4, 10, 4); t.translate(0, 2.2, 0); add(t);
+    const flare = new THREE.CylinderGeometry(0.17, 0.3, 0.38, 10, 1); flare.translate(0, 0.19, 0); add(flare);
+    const rr = rng(2323);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + rr() * 0.5, h0 = 3.1 + rr() * 1.1, len = 1.2 + rr() * 0.9, h1 = h0 + 1.0 + rr() * 0.8;
+      const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, h0, 0), new THREE.Vector3(Math.cos(a) * len * 0.5, h0 + (h1 - h0) * 0.55, Math.sin(a) * len * 0.5), new THREE.Vector3(Math.cos(a) * len, h1, Math.sin(a) * len)]);
+      add(new THREE.TubeGeometry(curve, 8, 0.06 - i * 0.003, 6, false));
+    }
+    return ctx.mergeGeometries(parts, false);
+  })();
   const canopyParts = [];
   const blob = (r, x, y, z, det = 2) => { const g = new THREE.IcosahedronGeometry(r, det); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const vx = p.getX(i), vy = p.getY(i), vz = p.getZ(i); const nzv = Math.sin(vx * 3.1 + vy * 2.3) * Math.cos(vz * 2.7 + vx * 1.9); const k = 1 + 0.12 * nzv; p.setXYZ(i, vx * k, vy * k * 0.86, vz * k); } g.translate(x, y, z); g.computeVertexNormals(); return g.toNonIndexed(); };
   const blobDefs = [[2.1, 0, 5.9, 0], [1.6, 1.4, 5.3, 0.4], [1.6, -1.3, 5.4, -0.5], [1.5, 0.3, 5.2, 1.4], [1.5, -0.4, 5.6, -1.4], [1.35, 0.2, 7.2, 0.1], [1.1, 1.5, 6.6, -1.2], [1.1, -1.6, 6.5, 1.0]];
@@ -162,7 +176,7 @@ export function buildProps(scene, glow, ctx) {
   }
   const allTrees = [...treePos.map(([x, z]) => ({ x, z, s: 0.85 + R() * 0.45 })), ...parkTrees.map(([x, z]) => ({ x, z, s: 1.0 + R() * 0.7 }))];
   const nT = allTrees.length;
-  const trunkMat = pm('concrete', { color: 0x4a3c30, p: [0, 0, 0, 0] });
+  const trunkMat = pm('bark', { color: 0x5a4636, wet: 0.6 });
   const canopyMat = pm('canopy', { color: 0xffffff, rough: 0.7, wet: 0.4, side: THREE.DoubleSide });
   const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, nT), canopies = new THREE.InstancedMesh(canopyGeo, canopyMat, nT);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), col = new THREE.Color();
@@ -191,17 +205,57 @@ export function buildProps(scene, glow, ctx) {
   const blue = pm('paint', { color: 0x1c3f8a, rough: 0.4, wet: 1 });
   const bench = (x, z, ry) => {
     const b = new Kit();
-    for (let i = 0; i < 5; i++) b.box(wood, 1.8, 0.04, 0.09, 0, 0.44, -0.2 + i * 0.1, { r: 0.008 });
-    for (let i = 0; i < 4; i++) b.box(wood, 1.8, 0.07, 0.03, 0, 0.6 + i * 0.09, -0.28 - i * 0.02, { rx: -0.2, r: 0.006 });
-    for (const s of [-1, 1]) { b.box(dark, 0.05, 0.44, 0.6, s * 0.82, 0, -0.05, { r: 0.008 }); b.box(dark, 0.06, 0.05, 0.55, s * 0.82, 0.44, -0.04, { r: 0.01 }); }
+    // slatted seat and back with gaps, cast-iron ends with scrolled arm rests and a centre brace
+    for (let i = 0; i < 5; i++) b.box(wood, 1.8, 0.038, 0.085, 0, 0.44, -0.2 + i * 0.1, { r: 0.012, seg: 3 });
+    for (let i = 0; i < 4; i++) b.box(wood, 1.8, 0.07, 0.03, 0, 0.6 + i * 0.095, -0.28 - i * 0.02, { rx: -0.2, r: 0.01, seg: 3 });
+    for (const s of [-1, 1]) {
+      b.box(dark, 0.05, 0.43, 0.06, s * 0.84, 0, -0.26, { r: 0.008 }); b.box(dark, 0.05, 0.43, 0.06, s * 0.84, 0, 0.2, { r: 0.008 });
+      b.box(dark, 0.05, 0.05, 0.6, s * 0.84, 0.42, -0.04, { r: 0.012 });
+      b.strut(dark, [s * 0.84, 0.43, -0.28], [s * 0.86, 0.95, -0.42], 0.024, 0.02, { seg: 8 });
+      b.box(dark, 0.06, 0.05, 0.5, s * 0.84, 0.66, -0.05, { r: 0.02, rx: 0.05 });
+      b.strut(dark, [s * 0.84, 0.45, 0.2], [s * 0.84, 0.66, 0.16], 0.02, 0.02, { seg: 8 });
+      b.torus(dark, 0.06, 0.012, s * 0.84, 0.55, 0.2, { rx: 0, ry: Math.PI / 2, seg: 14, seg2: 5 });
+      for (const zz of [-0.4, 0.28]) b.box(steel, 0.09, 0.012, 0.09, s * 0.84, 0, zz, { r: 0.004 });
+    }
+    b.box(dark, 1.62, 0.03, 0.03, 0, 0.2, -0.04);
     F.finish(scene, b, x, GY, z, ry);
     F.colBox(x, z, ry ? 0.6 : 1.9, ry ? 1.9 : 0.6, 0, -1, 1, 0);
   };
-  const bin = (x, z) => { K.cyl(green, 0.24, 0.22, 0.85, x, GY, z, { seg: 14 }); K.cyl(dark, 0.26, 0.24, 0.06, x, GY + 0.82, z, { seg: 14 }); K.cyl(steel, 0.235, 0.235, 0.03, x, GY + 0.55, z, { seg: 14 }); F.colBox(x, z, 0.5, 0.5, 0, -1, 1, 0); };
-  const hydrant = (x, z) => { K.cyl(red, 0.11, 0.13, 0.55, x, GY, z, { seg: 10 }); K.sph(red, 0.12, x, GY + 0.6, z, { seg: 10, seg2: 8 }); K.cyl(red, 0.05, 0.05, 0.36, x, GY + 0.36, z, { rz: Math.PI / 2, cy: true, seg: 8 }); K.cyl(steel, 0.05, 0.05, 0.05, x, GY + 0.72, z, { seg: 8 }); };
+  const bin = (x, z) => {
+    K.lathe(green, [[0, 0.05], [0.2, 0.05], [0.235, 0.09], [0.245, 0.85], [0.23, 0.87], [0, 0.87]], x, GY, z, { seg: 18 });
+    for (const yy of [0.15, 0.45, 0.78]) K.torus(dark, 0.242, 0.012, x, GY + yy, z, { rx: Math.PI / 2, seg: 20, seg2: 5 });
+    for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; K.box(steel, 0.02, 0.5, 0.008, x + Math.cos(a) * 0.245, GY + 0.22, z + Math.sin(a) * 0.245, { ry: -a + Math.PI / 2 }); }   // perforated strips
+    K.lathe(dark, [[0.235, 0.86], [0.27, 0.87], [0.27, 0.92], [0.12, 0.98], [0.1, 0.99], [0.0, 0.99]], x, GY, z, { seg: 18 });          // domed lid
+    K.torus(steel, 0.12, 0.01, x, GY + 0.985, z, { rx: Math.PI / 2, seg: 16, seg2: 5 });
+    K.box(dark, 0.3, 0.02, 0.12, x, GY + 0.0, z, { r: 0.006 });
+    F.colBox(x, z, 0.5, 0.5, 0, -1, 1, 0);
+  };
+  const hydrant = (x, z) => {
+    K.lathe(red, [[0, 0], [0.16, 0], [0.17, 0.04], [0.13, 0.07], [0.115, 0.15], [0.12, 0.5], [0.135, 0.56], [0.13, 0.6], [0.0, 0.6]], x, GY, z, { seg: 16 });
+    K.lathe(red, [[0.0, 0.6], [0.11, 0.6], [0.125, 0.66], [0.09, 0.72], [0.0, 0.76]], x, GY, z, { seg: 16 });
+    K.cyl(steel, 0.03, 0.03, 0.05, x, GY + 0.76, z, { seg: 6 });
+    for (const sg of [-1, 1]) {
+      K.cyl(red, 0.055, 0.055, 0.2, x + sg * 0.16, GY + 0.36, z, { rz: Math.PI / 2, cy: true, seg: 12 });
+      K.cyl(steel, 0.05, 0.05, 0.025, x + sg * 0.27, GY + 0.36, z, { rz: Math.PI / 2, cy: true, seg: 6 });
+      K.torus(steel, 0.06, 0.008, x + sg * 0.245, GY + 0.36, z, { rx: 0, ry: Math.PI / 2, seg: 12, seg2: 4 });
+    }
+    K.cyl(red, 0.075, 0.075, 0.17, x, GY + 0.34, z + 0.16, { rx: Math.PI / 2, cy: true, seg: 12 });
+    K.cyl(steel, 0.07, 0.07, 0.022, x, GY + 0.34, z + 0.26, { rx: Math.PI / 2, cy: true, seg: 6 });
+    K.torus(steel, 0.08, 0.008, x, GY + 0.34, z + 0.24, { rx: 0, seg: 12, seg2: 4 });
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; K.cyl(steel, 0.01, 0.01, 0.018, x + Math.cos(a) * 0.14, GY + 0.045, z + Math.sin(a) * 0.14, { seg: 6 }); }
+    K.torus(steel, 0.11, 0.006, x, GY + 0.55, z, { rx: Math.PI / 2, seg: 16, seg2: 4 });
+  };
   const bollard = (x, z) => { K.cyl(dark, 0.07, 0.07, 0.9, x, GY, z, { seg: 10 }); K.cyl(pm('plain', { color: 0xffffff, emissive: 0xffd9a0, emissiveI: 0.8 }), 0.072, 0.072, 0.05, x, GY + 0.8, z, { seg: 10 }); F.colBox(x, z, 0.2, 0.2, 0, -1, 1, 0); };
   const rack = (x, z, ry) => { const r = new Kit(); for (let i = 0; i < 5; i++) { r.tube(steel, [[i * 0.4, 0, 0], [i * 0.4, 0.75, 0], [i * 0.4 + 0.0, 0.85, 0.0], [i * 0.4 + 0.0, 0.85, 0.0]], 0.02, { seg: 6, radial: 6 }); } r.cyl(steel, 0.02, 0.02, 1.7, 0.8, 0.02, 0.0, { rz: Math.PI / 2, cy: true, seg: 6 }); F.finish(scene, r, x, GY, z, ry); };
-  const meter = (x, z) => { K.cyl(steel, 0.03, 0.03, 1.15, x, GY, z, { seg: 8 }); K.box(dark, 0.14, 0.24, 0.1, x, GY + 1.12, z, { r: 0.02 }); K.box(pm('plain', { color: 0x111111, emissive: 0x88ff88, emissiveI: 1.2 }), 0.09, 0.05, 0.005, x, GY + 1.26, z + 0.055); };
+  const meter = (x, z) => {
+    K.cyl(steel, 0.03, 0.036, 1.1, x, GY, z, { seg: 10 });
+    K.cyl(steel, 0.05, 0.05, 0.02, x, GY, z, { seg: 10 });
+    K.box(dark, 0.15, 0.27, 0.11, x, GY + 1.08, z, { r: 0.035, seg: 4 });
+    K.box(pm('plain', { color: 0x111111, emissive: 0x88ff88, emissiveI: 1.2 }), 0.09, 0.05, 0.005, x, GY + 1.27, z + 0.056);
+    K.box(steel, 0.05, 0.028, 0.006, x, GY + 1.2, z + 0.056, { r: 0.004 });                            // coin slot plate
+    K.box(pm('plain', { color: 0x1a2a4a, rough: 0.2, metal: 0.3 }), 0.12, 0.03, 0.09, x, GY + 1.345, z, { r: 0.006, rx: -0.3 });   // solar cell
+    K.box(green, 0.09, 0.05, 0.006, x, GY + 1.14, z + 0.056, { r: 0.004 });
+  };
   const mailbox = (x, z) => { K.box(blue, 0.5, 0.95, 0.42, x, GY, z, { r: 0.05 }); K.cyl(blue, 0.21, 0.21, 0.5, x, GY + 0.95, z, { rz: Math.PI / 2, cy: true, seg: 14 }); F.colBox(x, z, 0.55, 0.45, 0, -1, 1.4, 0); };
   const news = (x, z, c) => { K.box(pm('paint', { color: c, rough: 0.4, wet: 1 }), 0.5, 1.0, 0.45, x, GY, z, { r: 0.03 }); K.box(pm('plain', { color: 0xc8d4d8, metal: 0.4, rough: 0.05 }), 0.4, 0.35, 0.02, x, GY + 0.55, z + 0.225); F.colBox(x, z, 0.55, 0.5, 0, -1, 1.2, 0); };
   // place them along the avenue & cross-street sidewalks
