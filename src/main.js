@@ -55,6 +55,9 @@ async function boot() {
 
   // ---------------------------------------------------------------- renderer
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, stencil: false, powerPreference: 'high-performance', preserveDrawingBuffer: TEST });
+  // if a driver rejects one of the custom shaders, keep going and tell the player how to recover instead of failing silently
+  let shaderErrors = 0;
+  renderer.debug.onShaderError = (gl, program) => { shaderErrors++; console.error('[floor48] shader failed to compile:', (gl.getProgramInfoLog(program) || '').slice(0, 600)); };
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.NoToneMapping;
@@ -255,6 +258,7 @@ async function boot() {
   await nextFrame();
   try { if (renderer.compileAsync) await Promise.race([renderer.compileAsync(scene, camera), new Promise((r) => setTimeout(r, 8000))]); } catch (e) { /* ignore */ }
   ui.setLoading(1, 'Ready');
+  if (shaderErrors) setTimeout(() => ui.toast('Some visual effects could not compile on this GPU. Try a lower quality preset: Esc -> Settings.', 9000), 1500);
 
   window.__game = {
     THREE, G, game, player, camera, post, atmo, world, renderer, scene, audio, ui, probe, roomEnv,

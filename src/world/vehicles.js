@@ -126,22 +126,22 @@ function buildParts(name, S) {
     parts.trim.push(box(0.05, 0.02, 0.12, S.seatX[1] + 0.35, S.belt - 0.01, sgn * (S.hw - 0.02)));
     // wheel arches (dark discs on the body side)
     for (const ax of [S.axleF, S.axleR]) parts.arch.push(T(new THREE.CylinderGeometry(S.wheelR * 1.3, S.wheelR * 1.3, 0.02, 24), ax, S.wheelR, sgn * (S.hw + 0.0), Math.PI / 2, 0, 0));
-    // head + tail lights
-    const nx = S.len / 2 - 0.13;
-    parts.head.push(box(0.05, 0.06, 0.3, nx, S.y0 + 0.5, sgn * (S.hw * 0.62), 0, 0, 0));
-    parts.head.push(box(0.03, 0.025, 0.2, nx + 0.02, S.y0 + 0.42, sgn * (S.hw * 0.66)));
-    parts.trim.push(box(0.06, 0.13, 0.34, nx - 0.02, S.y0 + 0.48, sgn * (S.hw * 0.62)));
-    parts.tail.push(box(0.05, 0.09, 0.36, -nx, S.y0 + 0.62, sgn * (S.hw * 0.66)));
-    parts.brake.push(box(0.06, 0.06, 0.26, -nx - 0.005, S.y0 + 0.62, sgn * (S.hw * 0.64)));
-    parts.chrome.push(T(new THREE.CylinderGeometry(0.035, 0.035, 0.08, 10), -S.len / 2 + 0.05, S.y0 + 0.02, sgn * (S.hw * 0.55), 0, 0, Math.PI / 2));
+    // head + tail lights sit on the nose/tail cap plane (the loft tapers there, so anything set back is buried in the body)
+    const nx = S.len / 2 - 0.005;
+    parts.head.push(box(0.05, 0.07, 0.3, nx, S.y0 + 0.34, sgn * (S.hw * 0.62)));
+    parts.head.push(box(0.03, 0.02, 0.22, nx + 0.012, S.y0 + 0.26, sgn * (S.hw * 0.64)));
+    parts.trim.push(box(0.06, 0.12, 0.35, nx - 0.02, S.y0 + 0.33, sgn * (S.hw * 0.62)));
+    parts.tail.push(box(0.05, 0.09, 0.36, -nx, S.y0 + 0.5, sgn * (S.hw * 0.66)));
+    parts.brake.push(box(0.06, 0.06, 0.26, -nx - 0.005, S.y0 + 0.5, sgn * (S.hw * 0.64)));
+    parts.chrome.push(T(new THREE.CylinderGeometry(0.035, 0.035, 0.09, 10), -S.len / 2 - 0.005, S.y0 + 0.03, sgn * (S.hw * 0.55), 0, 0, Math.PI / 2));
   }
-  // grille, bumper valance, rear licence plate area, wipers, shark-fin antenna
-  parts.trim.push(box(0.05, 0.16, S.wid * 0.5, S.len / 2 - 0.05, S.y0 + 0.36, 0));
-  for (let i = 0; i < 4; i++) parts.chrome.push(box(0.02, 0.012, S.wid * 0.46, S.len / 2 - 0.02, S.y0 + 0.3 + i * 0.04, 0));
-  parts.trim.push(box(0.07, 0.11, S.wid * 0.9, S.len / 2 - 0.08, S.y0 + 0.02, 0));
-  parts.trim.push(box(0.07, 0.11, S.wid * 0.9, -S.len / 2 + 0.06, S.y0 + 0.02, 0));
-  parts.plate.push(T(new THREE.PlaneGeometry(0.52, 0.14), S.len / 2 - 0.02, S.y0 + 0.28, 0, 0, Math.PI / 2, 0));
-  parts.plate.push(T(new THREE.PlaneGeometry(0.52, 0.14), -S.len / 2 + 0.01, S.y0 + 0.5, 0, 0, -Math.PI / 2, 0));
+  // grille, bumper valance, licence plates, wipers, shark-fin antenna
+  parts.trim.push(box(0.05, 0.14, S.wid * 0.36, S.len / 2 - 0.005, S.y0 + 0.3, 0));
+  for (let i = 0; i < 3; i++) parts.chrome.push(box(0.02, 0.012, S.wid * 0.34, S.len / 2 + 0.018, S.y0 + 0.26 + i * 0.04, 0));
+  parts.trim.push(box(0.07, 0.11, S.wid * 0.9, S.len / 2 - 0.02, S.y0 + 0.02, 0));
+  parts.trim.push(box(0.07, 0.11, S.wid * 0.9, -S.len / 2 + 0.02, S.y0 + 0.02, 0));
+  parts.plate.push(T(new THREE.PlaneGeometry(0.52, 0.14), S.len / 2 + 0.032, S.y0 + 0.2, 0, 0, Math.PI / 2, 0));
+  parts.plate.push(T(new THREE.PlaneGeometry(0.52, 0.14), -S.len / 2 - 0.03, S.y0 + 0.42, 0, 0, -Math.PI / 2, 0));
   parts.trim.push(box(0.4, 0.008, 0.02, S.glass[S.glass.length - 2][0] + 0.15, S.belt + (name === 'van' ? 0.5 : 0.36), 0, 0, 0, -0.4));
   parts.trim.push(box(0.15, 0.04, 0.06, S.glass[1][0] + 0.5, S.roofH + 0.03, 0));
   if (name === 'sedan') parts.sign.push(box(0.4, 0.14, 0.9, 0.0, S.roofH + 0.03, 0));
