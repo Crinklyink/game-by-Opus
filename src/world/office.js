@@ -81,7 +81,7 @@ export function buildDesk(par, y0, x, z, ry, ctx) {
     local.box(M.plasticB, mw, mh, 0.018, 0, 0, 0, { r: 0.004 });
     local.box(M.plasticB, 0.16, 0.012, 0.08, 0, -0.03 - 0.0, -0.04);
     const grp = new THREE.Group();
-    local.mesh(grp);
+    local.mesh(grp, { occ: false });
     const scr = makeScreen(512, 300, drawChartScreen, { fps: 3 });
     scr.seed = c.seed; scr.mode = c.mode; scr.visible = true;
     const pl = new THREE.Mesh(new THREE.PlaneGeometry(mw - 0.02, mh - 0.02), scr.mat);

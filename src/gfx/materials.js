@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { G } from '../core/G.js';
 import { COMMON, SKY, PROC } from './glsl.js';
+import { SDF_GLSL } from './sdf.js';
 
 // optional per-kind vertex code for pm() materials: { head, normal, begin } (see patchMaterial)
 export const VERT = {};
@@ -15,7 +16,7 @@ const cache = new Map();
 export const interiorMats = new Set();
 
 const SHARED = ['uNoise3', 'uTime', 'uNight', 'uWet', 'uSunDir', 'uMoonDir', 'uZenith', 'uHorizon', 'uSunCol', 'uGlowCol',
-  'uCityGlow', 'uCloudCov', 'uCloudDark', 'uDisk', 'uFogDen', 'uFogH', 'uFlash'];
+  'uCityGlow', 'uCloudCov', 'uCloudDark', 'uDisk', 'uFogDen', 'uFogH', 'uFlash', 'tSdf', 'tVis', 'uSdfMin', 'uSdfInv', 'uSdfCfg', 'uSdfDbg'];
 
 const VERT_HEAD = 'varying vec3 vWPos; varying vec3 vLocal; varying vec3 vWNormal; varying vec2 vUvP;';
 const VERT_INJECT = /* glsl */`
@@ -45,6 +46,61 @@ vec3 bumpN(vec3 pos, vec3 N, vec2 dH, float fd){
   return normalize(abs(det) * N - grad);
 }`;
 
+// ---- light-loop surgery ---------------------------------------------------------------------------
+// Interior materials (uni.sdf) swap three.js' flat environment irradiance for the baked light volume
+// (sky visibility through the windows) and add contact AO, SDF soft shadows on the strongest pooled
+// lights and a wrap-lit bounce from every pooled light. See gfx/sdf.js.
+const rep = (src, from, to, tag) => {
+  if (!src.includes(from)) { console.error('[floor48] shader chunk patch missed:', tag); return src; }
+  return src.replace(from, to);
+};
+let _lightsBegin = null, _lightsMaps = null;
+function lightsBegin() {
+  if (_lightsBegin) return _lightsBegin;
+  let c = THREE.ShaderChunk.lights_fragment_begin;
+  c = rep(c, 'IncidentLight directLight;', /* glsl */`IncidentLight directLight;
+#ifdef SDF_ON
+vec3 sdfFill = vec3(0.0);
+vec3 sdfWN = normalize(geometryNormal * mat3(viewMatrix));
+float sdfDbgSh = 1.0;
+#endif`, 'directLight');
+  c = rep(c, 'getPointLightInfo( pointLight, geometryPosition, directLight );', /* glsl */`getPointLightInfo( pointLight, geometryPosition, directLight );
+#ifdef SDF_ON
+	if (sdfF > 0.0) {
+		vec3 sdfLv = (pointLight.position - geometryPosition) * mat3(viewMatrix);
+		#if UNROLLED_LOOP_INDEX < SDF_LIGHTS
+		if (directLight.visible) { float shv = sdfShadow(sdfP + pn * 0.04, vWPos + sdfLv, SDF_SOFT); if (UNROLLED_LOOP_INDEX == 0) sdfDbgSh = shv; directLight.color *= mix(1.0, shv, sdfF * smoothstep(0.04, 0.38, dot(sdfWN, normalize(sdfLv)))); }
+		#endif
+		sdfFill += sdfBounce(pointLight.color, sdfLv, pointLight.distance, sdfWN);
+	}
+#endif`, 'point');
+  c = rep(c, 'getSpotLightInfo( spotLight, geometryPosition, directLight );', /* glsl */`getSpotLightInfo( spotLight, geometryPosition, directLight );
+#ifdef SDF_ON
+	if (sdfF > 0.0) {
+		vec3 sdfLv = (spotLight.position - geometryPosition) * mat3(viewMatrix);
+		#if UNROLLED_LOOP_INDEX < SDF_SPOTS
+		if (directLight.visible) directLight.color *= mix(1.0, sdfShadow(sdfP + pn * 0.04, vWPos + sdfLv, SDF_SOFT), sdfF * smoothstep(0.04, 0.38, dot(sdfWN, normalize(sdfLv))));
+		#endif
+		sdfFill += 0.6 * sdfBounce(spotLight.color, sdfLv, spotLight.distance, sdfWN);
+	}
+#endif`, 'spot');
+  c = rep(c, '#if defined( RE_IndirectDiffuse )\n\tvec3 iblIrradiance = vec3( 0.0 );', /* glsl */`#ifdef SDF_ON
+reflectedLight.indirectDiffuse += sdfFill * BRDF_Lambert( material.diffuseColor );
+#endif
+#if defined( RE_IndirectDiffuse )
+	vec3 iblIrradiance = vec3( 0.0 );`, 'ibl');
+  return (_lightsBegin = c);
+}
+function lightsMaps() {
+  if (_lightsMaps) return _lightsMaps;
+  let c = THREE.ShaderChunk.lights_fragment_maps;
+  c = rep(c, 'iblIrradiance += getIBLIrradiance( geometryNormal );', /* glsl */`iblIrradiance += getIBLIrradiance( geometryNormal );
+		#ifdef SDF_ON
+		if (sdfF > 0.0) iblIrradiance = mix(iblIrradiance, interiorIrr(vWPos, sdfWN), sdfF);
+		#endif`, 'maps');
+  return (_lightsMaps = c);
+}
+
 export function patchMaterial(shader, procSrc, uni, extra = '', vert = null) {
   for (const k of SHARED) shader.uniforms[k] = G.u[k];
   shader.uniforms.uScale = uni.uScale;
@@ -64,16 +120,28 @@ export function patchMaterial(shader, procSrc, uni, extra = '', vert = null) {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + (vert.begin || ''));
   }
 
+  const q = G.q || {};
+  const sdfDefs = uni.sdf ? `#define SDF_ON
+#define SDF_AO_TAPS ${q.sdfTaps ?? 5}
+#define SDF_STEPS ${q.sdfSteps ?? 16}
+#define SDF_LIGHTS ${q.sdfLights ?? 3}
+#define SDF_SPOTS ${q.sdfSpots ?? 2}
+#define SDF_SOFT 8.0
+` : '';
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', `#include <common>
 varying vec3 vWPos; varying vec3 vLocal; varying vec3 vWNormal; varying vec2 vUvP;
 uniform float uScale, uWetAmt, uWet;
+${sdfDefs}
 ${COMMON}
 ${SKY}
+${uni.sdf ? SDF_GLSL : ''}
 ${FRAG_LIB}
 ${extra}
 ${procSrc}
 `)
+    .replace('#include <lights_fragment_begin>', uni.sdf ? lightsBegin() : '#include <lights_fragment_begin>')
+    .replace('#include <lights_fragment_maps>', uni.sdf ? lightsMaps() : '#include <lights_fragment_maps>')
     .replace('#include <color_fragment>', /* glsl */`
 #include <color_fragment>
 S ps; ps.alb = diffuseColor.rgb; ps.rough = roughness; ps.metal = metalness; ps.h = 0.0; ps.emis = vec3(0.0); ps.ao = 1.0; ps.a = 1.0;
@@ -84,12 +152,17 @@ ps.alb *= mix(1.0, 0.62, wetK);
 ps.rough = mix(ps.rough, 0.07, wetK * 0.85);
 diffuseColor.rgb = ps.alb;
 diffuseColor.a *= ps.a;
+float sdfF = 0.0, sdfAOv = 1.0; vec3 sdfP = vWPos;
+#ifdef SDF_ON
+sdfF = sdfFade(vWPos);
+if (sdfF > 0.0) { sdfP = vWPos + pn * 0.03; sdfAOv = mix(1.0, sdfAO(sdfP, pn), sdfF); }
+#endif
 `)
     .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = clamp(ps.rough, 0.04, 1.0);')
     .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = ps.metal;')
     .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = bumpN(-vViewPosition, normal, vec2(dFdx(ps.h), dFdy(ps.h)), faceDirection);')
     .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += ps.emis;')
-    .replace('#include <aomap_fragment>', 'reflectedLight.indirectDiffuse *= ps.ao; reflectedLight.indirectSpecular *= mix(1.0, ps.ao, 0.6);')
+    .replace('#include <aomap_fragment>', 'reflectedLight.indirectDiffuse *= ps.ao * sdfAOv; reflectedLight.indirectSpecular *= mix(1.0, ps.ao * sdfAOv, 0.6);\nreflectedLight.directDiffuse *= mix(1.0, sdfAOv, 0.55); reflectedLight.directSpecular *= mix(1.0, sdfAOv, 0.55);\n#ifdef SDF_ON\nif (uSdfDbg > 0.5) { if (uSdfDbg < 1.5) { reflectedLight.directDiffuse = vec3(0.0); reflectedLight.directSpecular = vec3(0.0); } else if (uSdfDbg < 2.5) { reflectedLight.indirectDiffuse = vec3(0.0); reflectedLight.indirectSpecular = vec3(0.0); } else if (uSdfDbg < 3.5) { reflectedLight.directDiffuse = vec3(sdfAOv * 0.5); reflectedLight.indirectDiffuse = vec3(0.0); reflectedLight.directSpecular = vec3(0.0); reflectedLight.indirectSpecular = vec3(0.0); } else { reflectedLight.directDiffuse = vec3(sdfDbgSh * 0.5); reflectedLight.indirectDiffuse = vec3(0.0); reflectedLight.directSpecular = vec3(0.0); reflectedLight.indirectSpecular = vec3(0.0); } }\n#endif')
     .replace('#include <fog_fragment>', 'gl_FragColor.rgb = min(gl_FragColor.rgb, vec3(48.0)); if (any(isnan(gl_FragColor.rgb))) gl_FragColor.rgb = vec3(0.0);\ngl_FragColor.rgb = applyFog(gl_FragColor.rgb, vWPos);');
 }
 
@@ -102,6 +175,11 @@ export function pm(kind = 'plain', o = {}) {
   if (o.emissive != null) { params.emissive = o.emissive; params.emissiveIntensity = o.emissiveI ?? 1; }
   if (o.side != null) params.side = o.side;
   if (o.transparent) { params.transparent = true; params.opacity = o.opacity ?? 1; }
+  if (o.alphaTest) params.alphaTest = o.alphaTest;
+  if (o.glass) {   // clear glass: the surface adds its (Fresnel) reflections on top of what is behind it instead of being scaled by alpha
+    Object.assign(params, { transparent: true, opacity: o.opacity ?? 0.08, depthWrite: false, blending: THREE.CustomBlending, blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor });
+  }
   if (o.physical) {
     if (o.sheen) { params.sheen = o.sheen; params.sheenRoughness = o.sheenRough ?? 0.5; params.sheenColor = new THREE.Color(o.sheenColor ?? 0xffffff); }
     if (o.clearcoat) { params.clearcoat = o.clearcoat; params.clearcoatRoughness = o.ccRough ?? 0.05; }
@@ -115,9 +193,10 @@ export function pm(kind = 'plain', o = {}) {
     uP: { value: new THREE.Vector4(...(o.p ?? [0, 0, 0, 0])) },
     uCol2: { value: new THREE.Color(o.col2 ?? 0x000000) },
     uWetAmt: { value: o.wet ?? 0 },
+    sdf: !!(o.interior || o.sdf),
   };
   m.userData = { kind, o, uni };
-  m.customProgramCacheKey = () => `pm:${kind}:${o.physical ? 1 : 0}`;
+  m.customProgramCacheKey = () => `pm:${kind}:${o.physical ? 1 : 0}:${uni.sdf ? 1 : 0}`;
   m.onBeforeCompile = (shader) => patchMaterial(shader, PROC[kind] || PROC.plain, uni, '', VERT[kind] || null);
   if (o.interior) { interiorMats.add(m); if (G.interiorEnv) m.envMap = G.interiorEnv; }
   cache.set(key, m);

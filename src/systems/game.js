@@ -63,7 +63,7 @@ export class Game {
   newGame() {
     this.state = defaultState();
     this.market = new Market(); G.market = this.market;
-    G.time.hour = 6.75; G.time.day = 1;
+    G.time.hour = 7.5; G.time.day = 1;
     this.ui.goalsDone = {}; this.ui.renderGoals();
     // wake up in bed
     this.player.teleport(-46.2, APT_Y, 25.0, Math.PI / 2 + 0.2, 1);

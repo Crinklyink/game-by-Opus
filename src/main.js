@@ -9,6 +9,7 @@ import { Atmosphere } from './gfx/sky.js';
 import { PostFX } from './gfx/postfx.js';
 import { GlowField } from './gfx/glow.js';
 import { LightPool } from './gfx/lights.js';
+import { initSdfUniforms, bakeSdf, SDF } from './gfx/sdf.js';
 import { PlanarReflection } from './gfx/planar.js';
 import { InteriorProbe } from './gfx/probe.js';
 import { setInteriorEnv } from './gfx/materials.js';
@@ -26,7 +27,7 @@ import { buildBurger, buildGrocery } from './world/shops.js';
 import { buildUpgrades } from './world/upgrades.js';
 import { updateScreens } from './world/screens.js';
 import { Kit, addCollider } from './world/kit.js';
-import { APT_Y } from './world/consts.js';
+import { APT_Y, CEIL_H } from './world/consts.js';
 import { Player } from './systems/player.js';
 import { Game, loadSettings } from './systems/game.js';
 import { zoneAt } from './systems/zones.js';
@@ -48,6 +49,7 @@ async function boot() {
   const settings = loadSettings();
   const qKey = params.get('q') || settings.quality || 'auto';
   const q = pickPreset(gpu, qKey);
+  for (const key of ['sdfLights', 'sdfSpots', 'sdfTaps', 'sdfSteps', 'spots', 'lights']) if (params.has(key)) q[key] = +params.get(key);   // test overrides
   G.q = q; G.qKey = qKey;
   log('GPU:', gpu.renderer, '| tier:', gpu.tier, '| preset:', q.id, '| msaa:', q.msaa);
   ui.setLoading(0.02, 'Warming up the GPU');
@@ -73,7 +75,8 @@ async function boot() {
   const post = new PostFX(renderer, q); G.post = post;
   const planar = new PlanarReflection(renderer, q); G.planar = planar;
   const glow = new GlowField(6144); G.glow = glow; scene.add(glow.mesh);
-  const pool = new LightPool(scene, q.lights); G.pool = pool;
+  initSdfUniforms();
+  const pool = new LightPool(scene, q.lights, q.spots || 0); G.pool = pool;
   atmo.dome.layers.enable(1); glow.mesh.layers.enable(1);
   const audio = new GameAudio(); G.audio = audio;
   // neutral warm "room" environment for interiors other than the apartment (which has its own live probe)
@@ -124,6 +127,12 @@ async function boot() {
   await step(0.56, 'Starting traffic', async () => { W.traffic = new Traffic(scene, glow, q, {}); G.traffic = W.traffic; });
   await step(0.66, 'Furnishing the apartment', async () => { W.apt = buildApartment(scene, { rand: rng(99), glow }); G.apt = W.apt; });
   await step(0.76, 'Installing the elevator', async () => { W.elevator = buildElevator(scene); G.elevator = W.elevator; W.lobby = buildLobby(scene, { rand: rng(31) }); });
+  await step(0.8, 'Baking the interior light volume', async () => {
+    if (!q.sdf) return;
+    bakeSdf(G.occ, { min: new THREE.Vector3(-51, APT_Y - 0.7, 13), max: new THREE.Vector3(-17, APT_Y + 4.3, 38.5), voxel: q.sdfVoxel, emitters: G.emitters, floorY: APT_Y, ceilH: CEIL_H, ceilZ0: 20.45 });
+    G.u.uSdfCfg.value.set(1, q.sdfAO, 0.035, 0.005);
+    log('light volume:', SDF.count, 'occluders,', SDF.ms + 'ms');
+  });
   await step(0.84, 'Opening the shops', async () => { W.shops = { burger: buildBurger(scene, glow, { rand: rng(51) }), grocery: buildGrocery(scene, glow, { rand: rng(52) }) }; });
   await step(0.9, 'Details and weather', async () => {
     W.weatherSys = new Weather(scene, q);
@@ -199,7 +208,7 @@ async function boot() {
     { const zn = game.zone ? game.zone.name : 'apartment'; LightPool.zone = (zn === 'apartment' || zn === 'balcony') ? 'apartment' : (zn === 'park' || zn === 'street') ? 'street' : zn;
       const want = (zn === 'apartment' || zn === 'balcony' || zn === 'hall') && probe && probe.env ? 'probe' : 'room';
       if (want !== envMode) { envMode = want; setInteriorEnv(want === 'probe' ? probe.env.texture : roomEnv); } }
-    pool.update(dt, camera.position);
+    pool.update(dt, camera.position, camera);
     if (probe && render) probe.update(dt, inApt(), frames === 2);
     if (started) { const h = player.hover; ui.setPrompt(h ? (typeof h.label === 'function' ? h.label() : h.label) : null); }
     if (audio.ready) {
@@ -214,7 +223,7 @@ async function boot() {
     if (!render) return;
     planar.update(scene, camera, streetMod.ROAD_Y, camera.position.y < 40 && G.u.uWet.value > 0.03 && (!game.zone || !game.zone.indoor));
     const zn0 = game.zone ? game.zone.name : 'apartment';
-    const expKey = 0.2 * (1 - ((zn0 === 'street' || zn0 === 'park') ? 0.5 : 0.3) * atmo.night);      // nights stay dark instead of being normalised to daylight
+    const expKey = 0.2 * (1 - ((zn0 === 'street' || zn0 === 'park') ? 0.5 : 0.45) * atmo.night);      // nights stay dark instead of being normalised to daylight
     post.render(scene, camera, dt, elapsed, { glass: true, expMin: 0.24, expKey, dof: !modal, dofScale: 0.8 });
     // dynamic resolution + fps overlay
     fpsAcc += dt; fpsN++;
@@ -261,7 +270,7 @@ async function boot() {
   if (shaderErrors) setTimeout(() => ui.toast('Some visual effects could not compile on this GPU. Try a lower quality preset: Esc -> Settings.', 9000), 1500);
 
   window.__game = {
-    THREE, G, game, player, camera, post, atmo, world, renderer, scene, audio, ui, probe, roomEnv,
+    THREE, G, game, player, camera, post, atmo, world, renderer, scene, audio, ui, probe, roomEnv, SDF,
     tp: (x, y, z, yaw = 0, pitch = 0, level) => { player.teleport(x, y - 1.68, z, yaw, level ?? (y > 100 ? 1 : 0)); player.pitch = pitch; player.eye = 1.68; },
     setTime: (h) => { G.time.hour = h; },
     setRain: (r) => { world.weatherSys.forced = r > 0.1 ? (r > 0.9 ? 'storm' : 'rain') : 'clear'; G.weather.target = G.weather.rain = r; G.weather.wet = r > 0.1 ? 1 : 0; },

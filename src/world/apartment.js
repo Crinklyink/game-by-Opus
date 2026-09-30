@@ -14,6 +14,7 @@ import * as F from './furniture.js';
 import { buildKitchen } from './kitchen.js';
 import { buildBed, buildDresser, buildWardrobe, buildReadingCorner, buildBathroom } from './bedbath.js';
 import { buildDesk, officeChair, buildBookshelf } from './office.js';
+import { slats, flutes } from './shapes.js';
 
 const Y = APT_Y, CH = CEIL_H;
 const HALL_X0 = -34.1, HALL_X1 = -20.4, HALL_Z0 = 32.6, HALL_Z1 = 36.4;
@@ -75,6 +76,10 @@ export function buildApartment(scene, ctx) {
   A.box(M.wallSage, 0.03, CH, 5.2, -41.885, Y, 26.9);                    // TV wall (living side)
   A.box(M.wallSage, 0.03, CH, 3.3, -41.885, Y, 31.0);
   A.box(M.wallBlue, 0.03, CH, UNIT.z1 - UNIT.z0 - 4.8, -48.985, Y, 24.4);         // headboard wall
+  // slatted walnut feature behind the TV (over a dark felt backing) with a warm cove strip along its top
+  A.box(M.blackMetal, 0.012, 2.75, 3.3, -41.86, 0.0 + Y, 27.0);
+  { const n = 44, span = 3.3, pitch = span / n; for (let i = 0; i < n; i++) A.box(M.walnutV, 0.028, 2.75, pitch - 0.014, -41.845, Y, 27.0 - span / 2 + pitch * (i + 0.5), { r: 0.004 }); }
+  A.box(M.led, 0.012, 0.012, 3.26, -41.84, Y + 2.72, 27.0);
   // baseboards + crown reveal
   const bb = (x0, x1, z0, z1) => A.box(M.trim, x1 - x0, 0.11, z1 - z0, (x0 + x1) / 2, Y, (z0 + z1) / 2);
   bb(-49.0, -48.97, UNIT.z0, 32.4); bb(-31.03, -31.0, UNIT.z0, 32.4);
@@ -87,19 +92,33 @@ export function buildApartment(scene, ctx) {
   for (const x of mx) A.box(M.blackMetal, 0.07, CH - 0.3, 0.14, x, Y, UNIT.z0 + 0.02, { r: 0.004 });
   A.box(M.blackMetal, 18, 0.07, 0.14, -40, Y, UNIT.z0 + 0.02);
   A.box(M.blackMetal, 18, 0.08, 0.14, -40, Y + CH - 0.38, UNIT.z0 + 0.02);
-  // ceiling downlights + sprinkler heads
-  const dlGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.012, 20);
-  const dl = new THREE.InstancedMesh(dlGeo, pm('plain', { color: 0x050505, emissive: 0xfff0d0, emissiveI: 5.5, interior: true }), 64);
-  let di = 0;
+  // ceiling downlights: an emissive trim disc per fixture + a real spot emitter (the light pool lights the nearest few)
+  const dlGeo = new THREE.CylinderGeometry(0.052, 0.052, 0.012, 20);
+  const dlBase = pm('plain', { color: 0x050505, emissive: 0xfff0d0, emissiveI: 5.5, interior: true });
   const m4 = new THREE.Matrix4();
-  const addDL = (x, z) => { m4.makeTranslation(x, Y + CH - 0.006, z); dl.setMatrixAt(di++, m4); };
-  for (let x = -40.5; x <= -31.5; x += 1.9) for (let z = 24; z <= 31.5; z += 1.9) if (!(x > -34.5 && z > 25.5)) addDL(x, z);
-  for (let x = -48; x <= -42.5; x += 2.0) for (let z = 21.6; z <= 27.6; z += 2.0) addDL(x, z);
-  for (let x = -48.2; x <= -43; x += 1.7) addDL(x, 31);
-  for (let x = -33.4; x <= -22; x += 2.3) addDL(x, 34.5);
-  dl.count = di; dl.instanceMatrix.needsUpdate = true;
-  par.add(dl);
-  groups.living.mats.push({ mat: dl.material, on: 5.5, off: 0.0 });
+  const DLY = Y + CH;
+  const downlights = (grp, pts, o = {}) => {
+    const mat = dlBase.clone();
+    const mesh = new THREE.InstancedMesh(dlGeo, mat, pts.length);
+    pts.forEach(([x, z], i) => { m4.makeTranslation(x, DLY - 0.006, z); mesh.setMatrixAt(i, m4); });
+    par.add(mesh);
+    grp.mats.push({ mat, on: 5.5, off: 0.0 });
+    // recessed can: dark trim ring around each disc
+    const ring = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.085, 0.085, 0.01, 20), pm('paint', { color: 0x1a1a1c, rough: 0.5, interior: true }), pts.length);
+    pts.forEach(([x, z], i) => { m4.makeTranslation(x, DLY - 0.004, z); ring.setMatrixAt(i, m4); });
+    par.add(ring);
+    for (const [x, z] of pts) gEmit(grp, { pos: new THREE.Vector3(x, DLY - 0.05, z), color: o.color ?? 0xffe6c2, intensity: o.intensity ?? 90, distance: o.distance ?? 8, spot: { angle: o.angle ?? 0.42, penumbra: 0.5 }, ...(o.zone ? { zone: o.zone } : {}), ...(o.levelRange ? { levelRange: o.levelRange } : {}) });
+  };
+  const dlLiving = [], dlBed = [], dlBath = [], dlHall = [];
+  for (let x = -40.5; x <= -31.5; x += 1.9) for (let z = 24; z <= 31.5; z += 1.9) if (!(x > -34.5 && z > 25.5)) dlLiving.push([x, z]);
+  for (let x = -48; x <= -42.5; x += 2.0) for (let z = 21.6; z <= 27.6; z += 2.0) dlBed.push([x, z]);
+  for (let x = -48.2; x <= -43; x += 1.7) dlBath.push([x, 31]);
+  for (let x = -33.4; x <= -22; x += 2.3) dlHall.push([x, 34.5]);
+  // (the groups exist already; emitters are created below with the rest of each room's lights)
+  downlights(groups.living, dlLiving);
+  downlights(groups.bedroom, dlBed, { intensity: 80 });
+  downlights(groups.bath, dlBath, { intensity: 85, color: 0xfff2e0 });
+  downlights(groups.hall, dlHall, { intensity: 90, distance: 9, zone: 'hall', levelRange: 14 });
 
   // ---- hallway ----
   wall(HALL_X0 - 0.25, HALL_X0, HALL_Z0, HALL_Z1, Y, CH, M.wallDark);              // west end
@@ -137,7 +156,7 @@ export function buildApartment(scene, ctx) {
     A.box(M.blackMetal, len, 0.05, 0.06, (x0 + x1) / 2, Y + 1.1, (z0 + z1) / 2, { ry: ang, r: 0.01 });
     for (let i = 0; i <= n; i++) A.box(M.blackMetal, 0.05, 1.12, 0.05, x0 + (dx * i) / n, Y, z0 + (dz * i) / n, { r: 0.006 });
     addCollider(Math.min(x0, x1) - 0.06, Math.max(x0, x1) + 0.06, Math.min(z0, z1) - 0.06, Math.max(z0, z1) + 0.06, Y, Y + 1.2, 1);
-    const gm = new THREE.Mesh(new THREE.PlaneGeometry(len, 1.0), new THREE.MeshPhysicalMaterial({ color: 0xbfd6dc, roughness: 0.05, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }));
+    const gm = new THREE.Mesh(new THREE.PlaneGeometry(len, 1.0), pm('plain', { color: 0x0a1518, rough: 0.02, glass: true, opacity: 0.1, side: THREE.DoubleSide }));
     gm.position.set((x0 + x1) / 2, Y + 0.6, (z0 + z1) / 2); gm.rotation.y = -ang; par.add(gm);
   };
   rail(BX0, BZ0, BX1, BZ0); rail(BX0, BZ0, BX0, UNIT.z0); rail(BX1, BZ0, BX1, UNIT.z0);
@@ -225,7 +244,7 @@ export function buildApartment(scene, ctx) {
   const fl = F.floorLamp(par, Y, -36.3, 29.5, Math.PI);
   retarget(fl.group, groups.living, M);
   gEmit(groups.living, { pos: new THREE.Vector3(fl.lightPos.x, Y + 1.4, fl.lightPos.z), color: 0xffc078, intensity: 55, distance: 10 });
-  gEmit(groups.living, { pos: new THREE.Vector3(-39.2, Y + 3.1, 26.2), color: 0xffdcb0, intensity: 70, distance: 13 });
+  gEmit(groups.living, { pos: new THREE.Vector3(-39.2, Y + 3.1, 26.2), color: 0xffdcb0, intensity: 26, distance: 13 });
   // shelf lights + art
   F.artwork(par, Y + 1.45, -41.83, 23.9, Math.PI / 2, 0.9, 1.2, 0, 'walnut');
   F.artwork(par, Y + 1.15, -41.83, 30.7, Math.PI / 2, 1.3, 0.85, 2, 'brass');
@@ -244,7 +263,7 @@ export function buildApartment(scene, ctx) {
   const diningMats = { ...M, bulb: (groups.dining.bulb = M.bulb.clone()) };
   groups.dining.mats.push({ mat: groups.dining.bulb, on: 7, off: 0 });
   for (const px of [-36.3, -35.6, -34.9]) F.pendant(par, px, Y + 2.05, 23.2, Y + CH, diningMats);
-  gEmit(groups.dining, { pos: new THREE.Vector3(-35.6, Y + 2.0, 23.2), color: 0xffcf98, intensity: 60, distance: 8 });
+  gEmit(groups.dining, { pos: new THREE.Vector3(-35.6, Y + 2.0, 23.2), color: 0xffcf98, intensity: 48, distance: 8 });
   // kitchen
   const K = buildKitchen(par, Y, { rand: R });
   out.kitchen = K;
@@ -252,8 +271,8 @@ export function buildApartment(scene, ctx) {
   const kBulb = M.bulb.clone(); groups.kitchen.mats.push({ mat: kBulb, on: 7, off: 0 }); kBulb.emissiveIntensity = 7;
   const kMats = { ...M, bulb: kBulb };
   for (const [px, pz] of K.pendantXZ) F.pendant(par, px, Y + 2.1, pz, Y + CH, kMats).group.scale.setScalar(0.8);
-  gEmit(groups.kitchen, { pos: new THREE.Vector3(-33.9, Y + 2.3, 28.2), color: 0xffd0a0, intensity: 62, distance: 9 });
-  gEmit(groups.kitchen, { pos: new THREE.Vector3(-31.7, Y + 1.35, 28.0), color: 0xfff0d8, intensity: 30, distance: 5 });
+  gEmit(groups.kitchen, { pos: new THREE.Vector3(-33.9, Y + 2.3, 28.2), color: 0xffd0a0, intensity: 30, distance: 9 });
+  gEmit(groups.kitchen, { pos: new THREE.Vector3(-31.7, Y + 1.35, 28.0), color: 0xfff0d8, intensity: 22, distance: 5 });
   // office
   const D = buildDesk(par, Y, -38.8, 21.95, 0, { rand: R });
   officeChair(par, Y, -38.8, 23.05, Math.PI);
@@ -270,7 +289,7 @@ export function buildApartment(scene, ctx) {
   radio.box(M.ledCool, 0.09, 0.008, 0.004, -0.07, 0.11, 0.068);
   F.finish(par, radio, -39.0, Y + 1.755, 32.1, Math.PI);
   retarget(BS.group, groups.shelf, M);
-  gEmit(groups.shelf, { pos: new THREE.Vector3(-40.1, Y + 1.6, 31.6), color: 0xffd7a0, intensity: 22, distance: 4.5 });
+  gEmit(groups.shelf, { pos: new THREE.Vector3(-40.1, Y + 1.6, 31.6), color: 0xffd7a0, intensity: 14, distance: 4.5 });
   // entry console
   const EK = new Kit();
   EK.box(M.walnut, 1.3, 0.05, 0.3, 0, 0.8, 0, { r: 0.006 });
@@ -290,7 +309,7 @@ export function buildApartment(scene, ctx) {
   const BED = buildBed(par, Y, -47.7, 25.0);
   retarget(BED.group, groups.bedroom, M);
   BED.lampPos.forEach((p) => gEmit(groups.bedroom, { pos: p, color: 0xffb870, intensity: 32, distance: 6 }));
-  gEmit(groups.bedroom, { pos: new THREE.Vector3(-45.5, Y + 3.2, 25.0), color: 0xffe0c0, intensity: 46, distance: 10 });
+  gEmit(groups.bedroom, { pos: new THREE.Vector3(-45.5, Y + 3.2, 25.0), color: 0xffe0c0, intensity: 18, distance: 10 });
   buildDresser(par, Y, -42.24, 25.9, -Math.PI / 2);
   buildWardrobe(par, Y, -47.6, 28.59, Math.PI, 2.6);
   const RC = buildReadingCorner(par, Y, -43.3, 21.95);
@@ -301,7 +320,7 @@ export function buildApartment(scene, ctx) {
   const B = buildBathroom(par, Y, { rand: R });
   retarget(B.group, groups.bath, M);
   gEmit(groups.bath, { pos: B.mirrorLightPos, color: 0xeaf2ff, intensity: 50, distance: 7 });
-  gEmit(groups.bath, { pos: new THREE.Vector3(-45.5, Y + 3.1, 30.7), color: 0xfff2e0, intensity: 36, distance: 7 });
+  gEmit(groups.bath, { pos: new THREE.Vector3(-45.5, Y + 3.1, 30.7), color: 0xfff2e0, intensity: 18, distance: 7 });
   // hall lights
   const hallBulb = M.led.clone(); groups.hall.mats.push({ mat: hallBulb, on: 4.5, off: 0.0 });
   gEmit(groups.hall, { pos: new THREE.Vector3(-30, Y + 3.2, 34.5), color: 0xffe2b8, intensity: 70, distance: 10, levelRange: 14, zone: 'hall' });
@@ -317,13 +336,13 @@ export function buildApartment(scene, ctx) {
     k.cyl(M.brass, 0.012, 0.012, 0.07, w - 0.05, 1.02, 0.03, { rx: Math.PI / 2, cy: true, seg: 10 });
     if (o.peep) { k.cyl(M.brass, 0.008, 0.008, 0.02, w / 2, 1.55, 0.02, { rx: Math.PI / 2, cy: true, seg: 8 }); k.box(M.brass, 0.1, 0.06, 0.01, w / 2, 1.9, 0.024); }
     const pivot = new THREE.Group();
-    const mesh = new THREE.Group(); k.mesh(mesh, {}); pivot.add(mesh);
+    const mesh = new THREE.Group(); k.mesh(mesh, { occ: false }); pivot.add(mesh);
     pivot.position.set(o.x, Y, o.z); pivot.rotation.y = o.rot0 ?? 0;
     par.add(pivot);
     // frame/architrave
     const fk = new Kit();
     fk.box(M.trim, 0.07, h + 0.07, 0.24, -0.035, 0, 0, {}); fk.box(M.trim, 0.07, h + 0.07, 0.24, w + 0.035, 0, 0, {}); fk.box(M.trim, w + 0.14, 0.07, 0.24, w / 2, h, 0, {});
-    const fg = new THREE.Group(); fk.mesh(fg, {}); fg.position.copy(pivot.position); fg.rotation.y = pivot.rotation.y; par.add(fg);
+    const fg = new THREE.Group(); fk.mesh(fg, { occ: false }); fg.position.copy(pivot.position); fg.rotation.y = pivot.rotation.y; par.add(fg);
     const d = { pivot, open: false, ang: 0, target: 0, col: o.col, w, name: o.name, closedRot: o.rot0 ?? 0 };
     doors.push(d);
     return d;
@@ -343,6 +362,12 @@ export function buildApartment(scene, ctx) {
   doorInteract(bath, new THREE.Vector3(-44.75, Y + 1.2, 29.0));
   // balcony slider
   it({ pos: new THREE.Vector3(-32.5, Y + 1.2, UNIT.z0 + 0.15), r: 1.2, label: () => (out.slider.open ? 'Close balcony door' : 'Open balcony door'), act: () => { out.slider.open = !out.slider.open; out.sliderCollider.on = !out.slider.open; G.audio?.door?.(out.slider.open); } });
+  // wall plates behind each light switch
+  { const P = new Kit(); const plate = (x, z, wallAxis) => { if (wallAxis === 'x') P.box(M.plasticW, 0.012, 0.115, 0.075, x, Y + 1.25, z, { r: 0.004 }); else P.box(M.plasticW, 0.075, 0.115, 0.012, x, Y + 1.25, z, { r: 0.004 }); };
+    plate(-41.864, 30.0, 'x'); plate(-31.006, 25.0, 'x'); plate(-42.106, 23.0, 'x'); plate(-45.6, 28.894, 'z'); plate(-41.864, 31.9, 'x');
+    const sk = (x, z, ax) => { if (ax === 'x') P.box(M.plasticW, 0.012, 0.08, 0.075, x, Y + 0.3, z, { r: 0.004 }); else P.box(M.plasticW, 0.075, 0.08, 0.012, x, Y + 0.3, z, { r: 0.004 }); };
+    sk(-48.964, 24.0, 'x'); sk(-38.0, 32.394, 'z'); sk(-35.9, 32.394, 'z'); sk(-31.006, 31.5, 'x');
+    P.mesh(par, { occ: false }); }
   // light switches
   const sw = (name, label, pos, grp) => it({ pos, r: 0.28, label: () => `${grp.on ? 'Turn off' : 'Turn on'} ${label}`, act: () => { grp.toggle(); G.audio?.click?.(); } });
   sw('living', 'living room lights', new THREE.Vector3(-41.75, Y + 1.3, 30.0), groups.living);

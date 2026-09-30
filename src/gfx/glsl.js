@@ -320,6 +320,24 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   s.h = (nz(p*45.0).b - 0.5)*0.00008*dfade(wp,0.003);
 }`,
 
+  book: /* glsl */`
+void surf(vec3 p, vec3 n, vec3 wp, inout S s){
+  // p = unit-box local space of an instanced book (x across the spine, y up 0..1, z through the thickness)
+  float id = fract(sin(dot(s.alb, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+  float front = step(0.6, abs(n.z));
+  float y = p.y * 1.0;
+  float band = (smoothstep(0.03, 0.012, abs(y - 0.9)) + smoothstep(0.03, 0.012, abs(y - 0.855)) * step(0.4, id) + smoothstep(0.03, 0.012, abs(y - 0.1))) * front;
+  float lab = step(0.38, y) * step(y, 0.38 + 0.12 + 0.2 * id) * step(abs(p.x), 0.34) * step(0.55, id) * front;
+  vec3 tint = mix(vec3(0.86, 0.72, 0.38), vec3(0.94, 0.92, 0.86), step(0.5, fract(id * 7.0)));
+  float hinge = smoothstep(0.42, 0.5, abs(p.x)) * front;
+  s.alb = mix(s.alb, tint, clamp(band * 0.9 + lab * 0.85, 0.0, 1.0));
+  s.alb *= 1.0 - 0.35 * hinge;
+  float pages = step(0.9, abs(n.y)) + step(0.9, n.z * -1.0) * 0.0;
+  s.alb = mix(s.alb, vec3(0.86, 0.82, 0.72) * (0.9 + 0.1 * nz(p * 60.0).r), clamp(pages, 0.0, 1.0));
+  s.rough = mix(0.55, 0.85, pages);
+  s.h = (nz(p * 40.0).g - 0.5) * 0.0004 * dfade(wp, 0.005) - (lab + band) * 0.0003;
+}`,
+
   rubber: /* glsl */`
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   float g = nz(p*24.0).r;
@@ -341,16 +359,24 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
 }`,
 
   foliage: /* glsl */`
-uniform vec3 uCol2;
+uniform vec3 uCol2; uniform vec4 uP;
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   vec2 uv = vUvP;
+  if (uP.x > 0.5) {                                              // split-leaf (monstera): slits from the margin + a few holes by the midrib
+    float ex = abs(uv.x - 0.5) * 2.0;
+    float sl = abs(fract(uv.y * 4.0 + 0.12) - 0.5);
+    float cut = step(sl, 0.07 + 0.05 * ex) * step(0.46, ex) * step(0.14, uv.y) * step(uv.y, 0.9);
+    vec2 hc = vec2(ex - 0.26, fract(uv.y * 4.0 + 0.62) - 0.5);
+    cut = max(cut, step(length(hc * vec2(1.0, 0.55)), 0.075) * step(0.2, uv.y) * step(uv.y, 0.85));
+    s.a = 1.0 - cut;
+  }
   float mid = smoothstep(0.03, 0.0, abs(uv.x - 0.5));
   float side = smoothstep(0.1, 0.0, abs(fract(uv.y*7.0 + abs(uv.x-0.5)*3.2) - 0.5) - 0.42);
   float v = clamp(mid*0.8 + side*0.45, 0.0, 1.0);
   vec3 c = mix(s.alb, uCol2, uv.y*0.5 + nz(p*2.3).r*0.3);
   s.alb = mix(c, c*1.5+0.02, v*0.5) * (0.85 + 0.25*nz(p*14.0).r);
-  s.rough = 0.55;
-  s.h = (v*0.0009 + (nz(p*30.0).b-0.5)*0.0003) * dfade(wp, 0.004);
+  s.rough = 0.42 + 0.14 * nz(p*9.0).g;
+  s.h = (v*0.0014 + (nz(p*30.0).b-0.5)*0.0005) * dfade(wp, 0.004);
   float fd = gl_FrontFacing ? 1.0 : -1.0;
   float back = clamp(-dot(n*fd, uSunDir), 0.0, 1.0);
   s.emis += s.alb * uSunCol * back * 0.28 * (1.0 - uNight);

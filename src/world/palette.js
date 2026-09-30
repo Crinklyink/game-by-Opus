@@ -52,6 +52,7 @@ export function palette() {
     rubber: pm('rubber', { color: 0x101011, ...I }),
     plasticW: pm('plain', { color: 0xf2f2f0, rough: 0.35, ...I }),
     plasticB: pm('plain', { color: 0x151517, rough: 0.35, ...I }),
+    glass: pm('plain', { color: 0x0a1518, rough: 0.02, glass: true, opacity: 0.09, side: THREE.DoubleSide, ...I }),
     glassBlack: pm('plain', { color: 0x050506, rough: 0.05, physical: true, clearcoat: 1, ccRough: 0.02, ...I }),
     tileSubway: pm('tile', { color: 0xf3f2ee, col2: 0x9b9a95, p: [0.30, 0.10, 0.004, 1], ...I }),
     tileBath: pm('tile', { color: 0xdad8d2, col2: 0x86847e, p: [0.6, 0.3, 0.005, 0], ...I }),

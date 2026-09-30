@@ -40,7 +40,15 @@ export const G = {
     uNoise3: { value: null },
     uRes: { value: new THREE.Vector2(1280, 720) },
     tRefract: { value: null },
+    // baked interior light volume (see gfx/sdf.js): signed distance field + sky-visibility SH
+    tSdf: { value: null },
+    tVis: { value: null },
+    uSdfMin: { value: new THREE.Vector3() },
+    uSdfInv: { value: new THREE.Vector3(1, 1, 1) },
+    uSdfCfg: { value: new THREE.Vector4(0, 1, 1, 0) },     // x enabled, y AO strength, z bounce strength, w ambient floor
+    uSdfDbg: { value: 0 },                                  // debug view: 1 indirect only, 2 direct only, 3 AO only
   },
+  occ: [],              // world-space light occluders { cx,cy,cz,hx,hy,hz,ry,t,r } collected while modelling
 };
 G.THREE = THREE;
 if (typeof window !== 'undefined') window.__G = G;

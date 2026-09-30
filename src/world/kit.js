@@ -13,8 +13,12 @@ export function mat4(x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) {
   return new THREE.Matrix4().compose(_p, _q, _s);
 }
 
+// Local-space occluder record: centre + half extents of a shape's bounds, plus an optional
+// primitive type (1 = upright cylinder, 2 = sphere) so round things do not become fat boxes.
+const _bb = new THREE.Box3();
+
 export class Kit {
-  constructor() { this.g = new Map(); this.tris = 0; }
+  constructor() { this.g = new Map(); this.tris = 0; this.occ = []; }
 
   push(mat, geo, m4) {
     if (geo.index) geo = geo.toNonIndexed();
@@ -26,6 +30,8 @@ export class Kit {
     if (!arr) this.g.set(mat, arr = []);
     arr.push(geo);
     this.tris += geo.attributes.position.count / 3;
+    geo.computeBoundingBox(); _bb.copy(geo.boundingBox);
+    this.occ.push({ cx: (_bb.min.x + _bb.max.x) / 2, cy: (_bb.min.y + _bb.max.y) / 2, cz: (_bb.min.z + _bb.max.z) / 2, hx: (_bb.max.x - _bb.min.x) / 2, hy: (_bb.max.y - _bb.min.y) / 2, hz: (_bb.max.z - _bb.min.z) / 2, t: 0, r: 0 });
     return geo;
   }
 
@@ -40,12 +46,16 @@ export class Kit {
   // cylinder / cone: y = bottom
   cyl(mat, rt, rb, h, x = 0, y = 0, z = 0, o = {}) {
     const geo = new THREE.CylinderGeometry(rt, rb, h, o.seg ?? 20, 1, o.open ?? false);
-    return this.push(mat, geo, mat4(x, o.cy ? y : y + h / 2, z, o.rx || 0, o.ry || 0, o.rz || 0));
+    const out = this.push(mat, geo, mat4(x, o.cy ? y : y + h / 2, z, o.rx || 0, o.ry || 0, o.rz || 0));
+    if (!o.rx && !o.rz && !o.open) { const r = this.occ[this.occ.length - 1]; r.t = 1; r.r = Math.max(rt, rb); }
+    return out;
   }
 
   sph(mat, r, x = 0, y = 0, z = 0, o = {}) {
     const geo = new THREE.SphereGeometry(r, o.seg ?? 20, o.seg2 ?? 14);
-    return this.push(mat, geo, mat4(x, y, z, o.rx || 0, o.ry || 0, o.rz || 0, o.sx ?? 1, o.sy ?? 1, o.sz ?? 1));
+    const out = this.push(mat, geo, mat4(x, y, z, o.rx || 0, o.ry || 0, o.rz || 0, o.sx ?? 1, o.sy ?? 1, o.sz ?? 1));
+    if (!o.sx && !o.sy && !o.sz) { const q = this.occ[this.occ.length - 1]; q.t = 2; q.r = r; }
+    return out;
   }
 
   torus(mat, R, r, x = 0, y = 0, z = 0, o = {}) {
@@ -67,9 +77,20 @@ export class Kit {
 
   // tube along points
   tube(mat, pts, r, o = {}) {
-    const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(p[0], p[1], p[2])), false, 'catmullrom', 0.5);
-    const geo = new THREE.TubeGeometry(curve, o.seg ?? 32, r, o.radial ?? 8, false);
+    const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(p[0], p[1], p[2])), !!o.closed, 'catmullrom', o.tension ?? 0.5);
+    const geo = new THREE.TubeGeometry(curve, o.seg ?? 32, r, o.radial ?? 8, !!o.closed);
     return this.push(mat, geo, null);
+  }
+
+  // tapered rod between two points (chair legs, stretchers, tripods, rails): r0 at a, r1 at b
+  strut(mat, a, b, r0, r1 = r0, o = {}) {
+    const va = new THREE.Vector3(a[0], a[1], a[2]), vb = new THREE.Vector3(b[0], b[1], b[2]);
+    const len = va.distanceTo(vb);
+    if (len < 1e-5) return null;
+    const geo = new THREE.CylinderGeometry(r1, r0, len, o.seg ?? 10, 1, false);
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize());
+    const m = new THREE.Matrix4().compose(va.clone().add(vb).multiplyScalar(0.5), q, new THREE.Vector3(1, 1, 1));
+    return this.push(mat, geo, m);
   }
 
   plane(mat, w, h, x, y, z, o = {}) {
@@ -112,6 +133,7 @@ export class Kit {
   // merge everything into one mesh per material and add to parent
   mesh(parent, o = {}) {
     const out = [];
+    if (o.occ !== false) registerOccluders(this.occ, parent);
     for (const [mat, arr] of this.g) {
       const geo = arr.length === 1 ? arr[0] : mergeGeometries(arr, false);
       if (!geo) continue;
@@ -122,6 +144,23 @@ export class Kit {
       parent.add(m); out.push(m);
     }
     return out;
+  }
+}
+
+// Convert a kit's local occluders to world space using the parent's transform (rotation about Y is kept
+// exactly; anything else falls back to the rotated bounds) and store them for the SDF bake.
+const _mw = new THREE.Matrix4(), _pv = new THREE.Vector3(), _ev = new THREE.Euler();
+function registerOccluders(list, parent) {
+  if (!list.length || !parent) return;
+  parent.updateWorldMatrix(true, false);
+  _mw.copy(parent.matrixWorld);
+  _ev.setFromRotationMatrix(_mw, 'YXZ');
+  const tilted = Math.abs(_ev.x) > 1e-3 || Math.abs(_ev.z) > 1e-3;
+  const ry = tilted ? 0 : _ev.y;
+  const sc = new THREE.Vector3().setFromMatrixScale(_mw).x || 1;
+  for (const r of list) {
+    _pv.set(r.cx, r.cy, r.cz).applyMatrix4(_mw);
+    G.occ.push({ cx: _pv.x, cy: _pv.y, cz: _pv.z, hx: r.hx * sc, hy: r.hy * sc, hz: r.hz * sc, ry, t: r.t, r: r.r * sc });
   }
 }
 
