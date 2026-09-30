@@ -44,7 +44,7 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   bool top = wp.y > -0.09;
   float fp = length(fwidth(w));
   float n1 = nz(vec3(w*0.11, 0.37)).r, n2 = nz(vec3(w*0.85, 0.71)).b, sp = nz(vec3(w*48.0, 0.9)).g, big = nz(vec3(w*0.031, 0.2)).r;
-  vec3 col; float rough; float hgt = 0.0; float refl = 0.0;
+  vec3 col; float rough; float hgt = 0.0; float refl = 0.0; float metalC = 0.0;
   float puddle = 0.0; float aoJ = 1.0;
   if (!top) {
     // ------- asphalt -------
@@ -94,7 +94,20 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
     float chip = smoothstep(0.55, 0.9, nz(vec3(w*5.0, 0.4)).g) * mark;
     col = mix(col, mcol * (0.75 + 0.25*n2) * (1.0 - 0.3*chip), mark * 0.92 * (1.0 - 0.45*wet));
     // cracks (fine) + tar-sealed cracks (long, wandering, glossy black) + rectangular utility-trench repairs
-    float crack = smoothstep(0.012, 0.0, abs(nz(vec3(w*0.9 + 0.3, 0.1)).r - 0.5) - 0.0) * smoothstep(0.55, 0.75, big) * (1.0 - smoothstep(0.02, 0.12, fp));
+    // cracks: alligator networks (cell borders) in worn patches + broken transverse cracks; never closed contour loops
+    vec2 vq = w / 0.5; vec2 vip = floor(vq), vfp = fract(vq); float vd1 = 8.0, vd2 = 8.0; vec2 vid = vip;
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+      vec2 g = vec2(float(i), float(j)); vec2 r = g + hash22(vip + g) - vfp; float d = dot(r, r);
+      if (d < vd1) { vd2 = vd1; vd1 = d; vid = vip + g; } else if (d < vd2) vd2 = d;
+    }
+    float vedge = sqrt(vd2) - sqrt(vd1);
+    float patchM = smoothstep(0.64, 0.8, nz(vec3(w*0.05, 1.3)).g);
+    float net = smoothstep(0.045 + fp * 2.0, 0.0, vedge) * patchM * step(0.38, hash21(vid + 13.0));
+    float tl = along + 1.3 * sin(off * 0.9 + along * 0.1) + 1.2 * nz(vec3(off * 0.3, along * 0.05, 0.6)).r;
+    float ti = floor(tl / 13.0);
+    float tp2 = tl - (ti + 0.5 + (hash11(ti * 5.1) - 0.5) * 0.6) * 13.0;
+    float tcr = smoothstep(0.014 + fp, 0.0, abs(tp2)) * step(0.5, hash11(ti * 3.3 + 9.0)) * smoothstep(0.4, 0.62, nz(vec3(off * 0.25 + ti, 0.0, 0.2)).r);
+    float crack = max(net, tcr) * (1.0 - smoothstep(0.03, 0.14, fp));
     float tarL = smoothstep(0.02 + fp*0.5, 0.004, abs(nz(vec3(w*0.13 + 5.1, 0.6)).r - 0.5)) * smoothstep(0.35, 0.65, nz(vec3(w*0.02, 2.2)).g);
     vec2 tcell = floor(w / vec2(23.0, 13.0)); vec2 tf = w - (tcell + 0.5) * vec2(23.0, 13.0);
     float th = hash21(tcell + 41.0);
@@ -106,6 +119,33 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
     col *= 1.0 - 0.6*crack;
     rough = 0.9 - 0.12*repair - 0.25*tarL - 0.15*trench;
     hgt = (sp - 0.5) * 0.0025 * (1.0 - smoothstep(0.006, 0.05, fp)) - crack*0.004*(1.0 - smoothstep(0.005, 0.03, fp)) - tedge*0.0025 + trench*0.0012;
+    // utility covers: cast-iron manholes in the lanes and storm-drain grates at the kerb
+    if (!inter && dAlong > 13.0) {
+      float sgn = off > 0.0 ? 1.0 : -1.0, seedS = (alongX ? 0.0 : 5.0) + (off > 0.0 ? 0.0 : 11.0);
+      float gi = floor(along / 26.0);
+      float gc = (gi + 0.5 + (hash11(gi * 1.7 + seedS) - 0.5) * 0.45) * 26.0;
+      vec2 gd = vec2(along - gc, abs(off) - 6.45);
+      float gIn = step(abs(gd.x), 0.55) * step(abs(gd.y), 0.24) * step(0.3, hash11(gi * 2.9 + seedS));
+      float slots = step(0.5, fract(gd.x * 7.5 + 0.25));
+      float gFrame = step(abs(gd.x), 0.6) * step(abs(gd.y), 0.29) * (1.0 - gIn) * step(0.3, hash11(gi * 2.9 + seedS));
+      col = mix(col, vec3(0.05, 0.05, 0.055), gFrame * 0.9);
+      col = mix(col, mix(vec3(0.012), vec3(0.085, 0.085, 0.09), slots), gIn);
+      hgt += -gIn * (1.0 - slots) * 0.004 + gFrame * 0.0006;
+      metalC = max(metalC, gIn * slots * 0.8);
+      float mi = floor(along / 37.0);
+      float mh = hash11(mi * 4.3 + seedS * 1.9);
+      float mc = (mi + 0.5 + (hash11(mi * 7.7 + seedS) - 0.5) * 0.5) * 37.0;
+      float lane = mh < 0.5 ? 1.75 : 5.2;
+      vec2 md = vec2(along - mc, abs(off) - lane);
+      float mr = length(md);
+      float mIn = step(mr, 0.43) * step(0.35, hash11(mi * 9.1 + seedS));
+      float mRing = step(0.43, mr) * step(mr, 0.47) * step(0.35, hash11(mi * 9.1 + seedS));
+      float pat = smoothstep(0.03, 0.0, abs(fract(mr * 9.0) - 0.5) - 0.38) + smoothstep(0.02, 0.0, abs(fract(md.x * 7.0) - 0.5) - 0.42) * 0.6;
+      col = mix(col, vec3(0.03, 0.03, 0.034) * (0.8 + 0.5 * pat), mIn);
+      col = mix(col, vec3(0.012), mRing * 0.85);
+      hgt += mIn * pat * 0.0025 - mRing * 0.003;
+      metalC = max(metalC, mIn * 0.7);
+    }
     // gutter strip next to the kerb is dirtier & wetter
     float gut = smoothstep(1.3, 0.0, 7.0 - min(sd.x, sd.y) ) * smoothstep(0.0, 0.2, 7.0 - min(sd.x, sd.y)) * (inter ? 0.0 : 1.0);
     col *= 1.0 - 0.25*gut;
@@ -159,7 +199,7 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   rough = mix(rough, 0.035, clamp(pud*1.4, 0.0, 1.0));
   float rip = uRain > 0.02 ? ripple(w, uTime, uRain) * clamp(pud*2.0 + film*0.5, 0.0, 1.0) : 0.0;
   hgt += rip * 0.0011;
-  s.alb = col; s.rough = rough; s.metal = 0.0; s.h = hgt; s.ao = aoJ;
+  s.alb = col; s.rough = mix(rough, 0.42, metalC); s.metal = metalC; s.h = hgt; s.ao = aoJ;
   // ------- planar reflection -------
   if (uPlanarOn > 0.5 && wet > 0.02) {
     vec3 V = normalize(cameraPosition - wp);

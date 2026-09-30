@@ -7,7 +7,7 @@ import { patchMaterial } from './materials.js';
 
 const FACADE_PROC = /* glsl */`
 uniform float uLit; uniform float uInterior;
-varying vec4 vInfo;
+varying vec4 vInfo; varying float vTop;
 
 vec3 roomPalette(float r){
   if (r < 0.2) return vec3(0.95, 0.72, 0.42);     // warm tungsten
@@ -53,7 +53,8 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   vec2 fw = fwidth(vec2(cx, cy)) * 1.5;
   float inx = smoothstep(lo.x, lo.x + fw.x, f.x) * smoothstep(hi.x, hi.x - fw.x, f.x);
   float iny = smoothstep(lo.y, lo.y + fw.y, f.y) * smoothstep(hi.y, hi.y - fw.y, f.y);
-  float open = inx * iny;                                 // the opening in the wall plane
+  float roofGap = vTop - wp.y;                            // metres below the roof edge (instanced boxes; far geometry has none)
+  float open = inx * iny * step(1.15, roofGap) * step(1.05, wp.y);   // no openings in the roof parapet band or the stone plinth
   // windows sit back in a reveal: follow the view ray to the recessed glass plane (parallax that moves with the camera)
   vec3 rdv = normalize(wp - cameraPosition);
   float rzv = clamp(-dot(rdv, n), 0.22, 1.0);
@@ -158,6 +159,14 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   float slab = (style > 0.5 && style < 2.5) ? 1.0 - smoothstep(0.09, 0.135, f.y) : 0.0;
   float pier = (style > 0.5 && style < 1.5) ? (1.0 - smoothstep(lo.x * 0.55, lo.x * 0.7, f.x)) + smoothstep(1.0 - lo.x * 0.7, 1.0 - lo.x * 0.55, f.x) : 0.0;
   vec3 wallS = wall * mix(1.0, 1.0 + 0.18 * slab + 0.14 * sillB, 1.0);
+  // roof parapet: coping cap, a projecting cornice line and the shadow it throws; dark stone plinth at street level
+  float cop = step(0.0, roofGap) * (1.0 - smoothstep(0.24, 0.3, roofGap));
+  float ledge = smoothstep(0.035, 0.0, abs(roofGap - 0.62));
+  float cshadow = smoothstep(0.66, 0.9, roofGap) * (1.0 - smoothstep(0.9, 1.15, roofGap)) * step(roofGap, 1.15);
+  float plinth = 1.0 - smoothstep(0.98, 1.08, wp.y);
+  wallS = mix(wallS, tint * 1.05 + vec3(0.07), cop * 0.75 * (style < 4.0 ? 1.0 : 0.0));
+  wallS *= 1.0 - 0.32 * cshadow * (style < 4.0 ? 1.0 : 0.0);
+  wallS = mix(wallS, vec3(0.11, 0.105, 0.1) * (0.8 + 0.5 * wn), plinth * 0.85);
   wallS = mix(wallS, wallS * (0.32 + 0.25 * nz(wp * 5.0).r), reveal);           // the reveal is in its own shadow
   float underSill = (style > 0.5 && style < 3.5) ? smoothstep(lo.y - 0.16, lo.y - 0.07, f.y) * (1.0 - step(lo.y - 0.075, f.y)) * inx : 0.0;
   wallS *= 1.0 - 0.3 * underSill;
@@ -168,7 +177,7 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   s.rough = mix(0.74 + 0.12 * wg, 0.05, win); s.rough = mix(s.rough, 0.36, frame);
   s.emis = emis * (1.0 - frame);
   s.ao = 1.0 - 0.45 * reveal - 0.25 * underSill;
-  float relief = 0.006 * (nz(wp * 7.0).r - 0.5) + 0.028 * sillB + 0.022 * slab + 0.03 * pier - 0.1 * reveal;
+  float relief = 0.006 * (nz(wp * 7.0).r - 0.5) + 0.028 * sillB + 0.022 * slab + 0.03 * pier - 0.1 * reveal + 0.05 * cop * step(style, 3.9) + 0.045 * ledge * step(style, 3.9) - 0.02 * plinth;
   s.h = relief * fdA * (1.0 - win);
 }
 `;
@@ -187,8 +196,8 @@ export function facadeMaterial(interior = true, vertexColors = false) {
   m.onBeforeCompile = (shader) => {
     patchMaterial(shader, FACADE_PROC, uni);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec4 aInfo; varying vec4 vInfo;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvInfo = aInfo;');
+      .replace('#include <common>', '#include <common>\nattribute vec4 aInfo; varying vec4 vInfo; varying float vTop;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvInfo = aInfo;\n#ifdef USE_INSTANCING\nvTop = instanceMatrix[3].y + instanceMatrix[1].y;\n#else\nvTop = 1.0e5;\n#endif');
   };
   facadeMats[key] = m;
   return m;

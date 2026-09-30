@@ -437,8 +437,45 @@ export function buildGrocery(scene, glow, ctx) {
   // exterior fascia + sign band + canopy
   K.box(green, x1 - x0 + 0.4, 1.4, 0.6, (x0 + x1) / 2, 4.4, z0 - 0.05);
   K.box(pm('paint', { color: 0xf6f6f2, rough: 0.5 }), x1 - x0 + 0.6, 0.12, 0.7, (x0 + x1) / 2, 4.32, z0 - 0.05);
-  K.box(M.blackMetal, 8, 0.2, 3.2, 41, 3.9, z0 - 1.5, { r: 0.02 });
-  for (const sx of [37.4, 44.6]) K.box(M.blackMetal, 0.2, 3.9, 0.2, sx, 0, z0 - 3.0);
+  // entrance canopy: steel slab with a green fascia and coping, recessed downlights, round posts on base plates, diagonal braces
+  { const cz = z0 - 1.55, cw = 8.4, cd = 3.3, cy = 3.45;
+    const steelC = pm('metal', { color: 0x1d1f21, p: [0, 60, 0, 0], rough: 0.42 });
+    const cap = pm('concrete', { color: 0xcdc8ba, wet: 1 });
+    K.box(steelC, cw, 0.1, cd, 41, cy, cz, { r: 0.015 });
+    K.box(green, cw + 0.1, 0.38, 0.1, 41, cy - 0.1, cz - cd / 2 - 0.02, { r: 0.01 });
+    for (const sx of [-1, 1]) K.box(green, 0.1, 0.38, cd + 0.1, 41 + sx * (cw / 2 + 0.02), cy - 0.1, cz, { r: 0.01 });
+    K.box(cap, cw + 0.22, 0.04, 0.2, 41, cy + 0.28, cz - cd / 2 - 0.02); for (const sx of [-1, 1]) K.box(cap, 0.2, 0.04, cd + 0.12, 41 + sx * (cw / 2 + 0.02), cy + 0.28, cz);
+    K.box(pm('plain', { color: 0x050505, emissive: 0xf4fff4, emissiveI: 3 }), cw - 0.2, 0.02, 0.04, 41, cy - 0.015, cz - cd / 2 + 0.06);        // LED strip under the fascia
+    const dl = pm('plain', { color: 0x050505, emissive: 0xfff2d8, emissiveI: 4.5 });
+    for (const dx of [-3, -1, 1, 3]) for (const dz of [-0.9, 0.5]) { K.cyl(dl, 0.11, 0.11, 0.02, 41 + dx, cy - 0.015, cz + dz, { seg: 14 }); K.cyl(steelC, 0.14, 0.14, 0.012, 41 + dx, cy - 0.022, cz + dz, { seg: 14 }); }
+    for (const sx of [37.4, 44.6]) {
+      K.cyl(steelC, 0.09, 0.09, cy, sx, 0.04, z0 - 3.0, { seg: 14 });
+      K.cyl(steelC, 0.19, 0.19, 0.04, sx, 0, z0 - 3.0, { seg: 14 }); K.torus(steelC, 0.095, 0.014, sx, 0.22, z0 - 3.0, { rx: Math.PI / 2, seg: 14, seg2: 5 });
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.78; K.cyl(steelC, 0.014, 0.014, 0.03, sx + Math.cos(a) * 0.14, 0.04, z0 - 3.0 + Math.sin(a) * 0.14, { seg: 6 }); }
+      K.strut(steelC, [sx, cy - 0.2, z0 - 3.0], [sx + (sx < 41 ? 0.9 : -0.9), cy - 0.02, z0 - 3.0], 0.03, 0.03, { seg: 6 });
+      K.box(steelC, 0.26, 0.12, 0.26, sx, cy - 0.14, z0 - 3.0, { r: 0.02 });
+    }
+  }
+  // sidewalk produce stands: tiered wooden display with crates of fruit and a chalk price board
+  { const wood = pm('woodfurn', { color: 0xb8925a, col2: 0x6a4a28, wet: 1 });
+    const cols = [0xd8342a, 0xf2b420, 0x3ea85a, 0xe86a20, 0xb0d840, 0x8a3ac8, 0xffe08a];
+    const fr = [];
+    for (const [sx, k] of [[31.5, 0], [50.5, 3]]) {
+      const sz = z0 - 1.25;
+      for (const dx of [-1.1, 1.1]) for (const dz of [-0.4, 0.4]) K.box(wood, 0.07, 1.0, 0.07, sx + dx, 0, sz + dz);
+      for (let t = 0; t < 3; t++) {
+        const y = 0.42 + t * 0.26, back = -0.18 * t;
+        K.box(wood, 2.4, 0.04, 0.5, sx, y, sz + back, { rx: -0.12 });
+        K.box(wood, 2.4, 0.09, 0.03, sx, y + 0.02, sz + back + 0.24, { r: 0.004 });
+        for (let f = 0; f < 18; f++) fr.push({ x: sx - 1.05 + f * 0.125 + (f % 2) * 0.02, y: y + 0.095, z: sz + back + ((f * 37) % 5 - 2) * 0.05, c: cols[(t * 2 + k + Math.floor(f / 5)) % cols.length], s: 0.05 + ((f * 13) % 4) * 0.008 });
+      }
+      K.box(pm('plain', { color: 0x1c2a22, rough: 0.9 }), 0.7, 0.5, 0.03, sx + 0.9, 1.05, sz - 0.62, { rx: -0.2 }); K.box(wood, 0.76, 0.56, 0.02, sx + 0.9, 1.04, sz - 0.6, { rx: -0.2 });
+      K.box(pm('plain', { color: 0x1c2a22, rough: 0.9 }), 0.64, 0.42, 0.012, sx + 0.9, 1.085, sz - 0.64, { rx: -0.2 });
+      addCollider(sx - 1.25, sx + 1.25, sz - 0.8, sz + 0.4, 0, 1.2, 0);
+    }
+    const g = new THREE.SphereGeometry(1, 8, 6); const im = new THREE.InstancedMesh(g, pm('plain', { color: 0xffffff, rough: 0.35 }), fr.length);
+    const m = new THREE.Matrix4(), c = new THREE.Color(); fr.forEach((f, i) => { m.compose(new THREE.Vector3(f.x, f.y + f.s, f.z), new THREE.Quaternion(), new THREE.Vector3(f.s, f.s * 0.92, f.s)); im.setMatrixAt(i, m); im.setColorAt(i, c.setHex(f.c)); }); im.castShadow = true; im.receiveShadow = true; par.add(im);
+  }
   // glazing frames
   for (let x = 20; x <= 62; x += 3.5) if (x < 38.5 || x > 43.5) K.box(M.blackMetal, 0.08, 2.7, 0.14, x, 0.85, z0 + 0.16);
   K.box(M.blackMetal, 42, 0.08, 0.14, 41, 3.5, z0 + 0.16); K.box(M.blackMetal, 42, 0.08, 0.14, 41, 0.85, z0 + 0.16);
@@ -549,9 +586,18 @@ export function buildGrocery(scene, glow, ctx) {
   const doorBlock = addCollider(39, 43, z0 - 0.05, z0 + 0.4, 0, 3, 0);
   const state = { open: 0 };
   // neon-ish exterior sign
-  const fasc = canvasTex(1024, 128, (c, w, h) => { c.fillStyle = '#2a8f4a'; c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.font = '900 84px "Arial Black", Arial'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('FRESHMART', w / 2, h / 2 + 3); });
-  const fm = new THREE.Mesh(new THREE.PlaneGeometry(14, 1.2), new THREE.MeshBasicMaterial({ map: fasc, toneMapped: false, color: new THREE.Color(1.5, 1.5, 1.5) })); fm.position.set(41, 4.4, z0 - 0.37); fm.rotation.y = Math.PI; par.add(fm);
-  fm.rotation.y = Math.PI; fm.position.z = z0 - 0.37;
+  const fasc = canvasTex(2048, 160, (c, w, h) => {
+    c.fillStyle = '#2a8f4a'; c.fillRect(0, 0, w, h);
+    c.font = '900 118px "Arial Black", Arial'; c.textAlign = 'left'; c.textBaseline = 'middle';
+    const tw = c.measureText('FRESHMART').width, x0 = (w - tw) / 2 + 60;
+    c.fillStyle = 'rgba(8,50,20,0.55)'; c.fillText('FRESHMART', x0 + 5, h / 2 + 8);
+    c.fillStyle = '#ffffff'; c.fillText('FRESHMART', x0, h / 2 + 4);
+    // apple + leaf logo
+    const lx = x0 - 78, ly = h / 2 + 6;
+    c.fillStyle = '#ffffff'; c.beginPath(); c.arc(lx - 14, ly, 30, 0, 7); c.arc(lx + 14, ly, 30, 0, 7); c.fill();
+    c.fillStyle = '#ffd23a'; c.beginPath(); c.moveTo(lx + 2, ly - 28); c.quadraticCurveTo(lx + 22, ly - 62, lx + 52, ly - 48); c.quadraticCurveTo(lx + 34, ly - 22, lx + 2, ly - 28); c.fill();
+  });
+  const fm = new THREE.Mesh(new THREE.PlaneGeometry(12.8, 1.0), new THREE.MeshBasicMaterial({ map: fasc, toneMapped: false, color: new THREE.Color(1.5, 1.5, 1.5) })); fm.position.set(41, 5.1, z0 - 0.37); fm.rotation.y = Math.PI; par.add(fm);
   // parking lot behind (z 42..104), painted stalls
   const lotMat = pm('asphaltLot', { color: 0xffffff, p: [18, 52, 46, 0], wet: 1 });
   const lot = new THREE.Mesh(new THREE.PlaneGeometry(46, 60), lotMat); lot.rotation.x = -Math.PI / 2; lot.position.set(41, GY + 0.008, 72); lot.receiveShadow = true; lot.layers.enable(1); par.add(lot);

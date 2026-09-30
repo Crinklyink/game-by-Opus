@@ -101,8 +101,8 @@ function makeLeafAtlas() {
 }
 
 // leaf cards scattered over the crown blobs (same layout for every tree: the whole crown is one shared geometry)
-function makeLeafCards(defs, density = 1) {
-  const R2 = rng(4441);
+function makeLeafCards(defs, density = 1, seed = 4441) {
+  const R2 = rng(seed);
   const pos = [], nor = [], uv = [], col = [];
   const nrm = new THREE.Vector3(), t1 = new THREE.Vector3(), t2 = new THREE.Vector3(), u = new THREE.Vector3(), v = new THREE.Vector3();
   const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
@@ -142,25 +142,28 @@ export function buildProps(scene, glow, ctx) {
   const ground = groundMaterial(G.planar.uniforms);
 
   // ---------------------------------------------------------------- trees
-  // trunk with a root flare and six limbs reaching into the crown (one shared geometry for every tree)
-  const trunkGeo = (() => {
+  // three crown types (round, tall oval, broad plane-tree) so a street of trees stops repeating itself. Each has its own trunk + limb
+  // geometry, solid crown core and leaf-card shell; instances of a type share them.
+  const CROWNS = [
+    { name: 'round', blobs: [[2.1, 0, 5.9, 0], [1.6, 1.4, 5.3, 0.4], [1.6, -1.3, 5.4, -0.5], [1.5, 0.3, 5.2, 1.4], [1.5, -0.4, 5.6, -1.4], [1.35, 0.2, 7.2, 0.1], [1.1, 1.5, 6.6, -1.2], [1.1, -1.6, 6.5, 1.0]], limbs: 6, trunkH: 4.4, seed: 2323, reach: [1.0, 1.7] },
+    { name: 'oval', blobs: [[1.55, 0, 5.3, 0], [1.5, 0.35, 6.5, 0.25], [1.3, -0.35, 7.6, -0.2], [1.05, 0.2, 8.6, 0.05], [1.3, 0.85, 5.0, 0.6], [1.2, -0.85, 5.3, -0.6], [1.0, 0.1, 4.2, 0.9], [0.95, -0.5, 6.0, -1.0]], limbs: 7, trunkH: 4.2, seed: 5151, reach: [0.45, 0.95] },
+    { name: 'broad', blobs: [[2.2, 0, 5.4, 0], [1.9, 1.9, 5.1, 0.4], [1.9, -1.8, 5.2, -0.4], [1.8, 0.3, 5.2, 1.9], [1.7, -0.4, 5.3, -1.8], [1.4, 0.2, 6.6, 0.1], [1.3, 1.6, 6.2, -1.3], [1.3, -1.5, 6.1, 1.4]], limbs: 8, trunkH: 3.7, seed: 7171, reach: [1.5, 2.3] },
+  ];
+  const buildTrunk = (cr) => {
     const parts = [];
     const add = (g) => { g = g.index ? g.toNonIndexed() : g; for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k); parts.push(g); };
-    const t = new THREE.CylinderGeometry(0.1, 0.17, 4.4, 10, 4); t.translate(0, 2.2, 0); add(t);
+    const t = new THREE.CylinderGeometry(0.1, 0.17, cr.trunkH, 10, 4); t.translate(0, cr.trunkH / 2, 0); add(t);
     const flare = new THREE.CylinderGeometry(0.17, 0.3, 0.38, 10, 1); flare.translate(0, 0.19, 0); add(flare);
-    const rr = rng(2323);
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 + rr() * 0.5, h0 = 3.1 + rr() * 1.1, len = 1.2 + rr() * 0.9, h1 = h0 + 1.0 + rr() * 0.8;
+    const rr = rng(cr.seed);
+    for (let i = 0; i < cr.limbs; i++) {
+      const a = (i / cr.limbs) * Math.PI * 2 + rr() * 0.5, h0 = cr.trunkH - 1.3 + rr() * 1.1, len = cr.reach[0] + rr() * (cr.reach[1] - cr.reach[0]), h1 = h0 + 1.0 + rr() * 0.8;
       const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, h0, 0), new THREE.Vector3(Math.cos(a) * len * 0.5, h0 + (h1 - h0) * 0.55, Math.sin(a) * len * 0.5), new THREE.Vector3(Math.cos(a) * len, h1, Math.sin(a) * len)]);
       add(new THREE.TubeGeometry(curve, 8, 0.06 - i * 0.003, 6, false));
     }
     return ctx.mergeGeometries(parts, false);
-  })();
-  const canopyParts = [];
+  };
   const blob = (r, x, y, z, det = 2) => { const g = new THREE.IcosahedronGeometry(r, det); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const vx = p.getX(i), vy = p.getY(i), vz = p.getZ(i); const nzv = Math.sin(vx * 3.1 + vy * 2.3) * Math.cos(vz * 2.7 + vx * 1.9); const k = 1 + 0.12 * nzv; p.setXYZ(i, vx * k, vy * k * 0.86, vz * k); } g.translate(x, y, z); g.computeVertexNormals(); return g.toNonIndexed(); };
-  const blobDefs = [[2.1, 0, 5.9, 0], [1.6, 1.4, 5.3, 0.4], [1.6, -1.3, 5.4, -0.5], [1.5, 0.3, 5.2, 1.4], [1.5, -0.4, 5.6, -1.4], [1.35, 0.2, 7.2, 0.1], [1.1, 1.5, 6.6, -1.2], [1.1, -1.6, 6.5, 1.0]];
-  for (const [r, x, y, z] of blobDefs) canopyParts.push(blob(r * 0.8, x, y, z));      // the solid core is smaller than the leaf shell around it
-  const canopyGeo = (() => { for (const g of canopyParts) for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k); return ctx.mergeGeometries(canopyParts, false); })();
+  const buildCanopy = (cr) => { const parts = cr.blobs.map(([r, x, y, z]) => blob(r * 0.8, x, y, z)); for (const g of parts) for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k); return ctx.mergeGeometries(parts, false); };
   const treePos = [];
   for (let x = -150; x <= 150; x += 17) { if (Math.abs(x) < 16 || (x > -66 && x < -12)) continue; treePos.push([x + (R() - 0.5) * 2, 10.9]); if (Math.abs(x + 8.5) > 16) treePos.push([x + 8.5, -10.9]); }
   for (let z = -150; z <= 150; z += 17) { if (Math.abs(z) < 16) continue; treePos.push([10.9, z + 4]); treePos.push([-10.9, z - 4]); }
@@ -175,27 +178,33 @@ export function buildProps(scene, glow, ctx) {
     parkTrees.push([x, z]);
   }
   const allTrees = [...treePos.map(([x, z]) => ({ x, z, s: 0.85 + R() * 0.45 })), ...parkTrees.map(([x, z]) => ({ x, z, s: 1.0 + R() * 0.7 }))];
-  const nT = allTrees.length;
+  allTrees.forEach((t) => { const r = R(); t.v = r < 0.42 ? 0 : r < 0.72 ? 1 : 2; });
   const trunkMat = pm('bark', { color: 0x5a4636, wet: 0.6 });
   const canopyMat = pm('canopy', { color: 0xffffff, rough: 0.7, wet: 0.4, side: THREE.DoubleSide });
-  const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, nT), canopies = new THREE.InstancedMesh(canopyGeo, canopyMat, nT);
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), col = new THREE.Color();
-  allTrees.forEach((t, i) => {
-    e.set(0, R() * 6.28, 0); q.setFromEuler(e); m4.compose(new THREE.Vector3(t.x, GY, t.z), q, new THREE.Vector3(t.s, t.s, t.s));
-    trunks.setMatrixAt(i, m4); canopies.setMatrixAt(i, m4);
-    canopies.setColorAt(i, col.setHSL(0.24 + (R() - 0.5) * 0.08, 0.55 + R() * 0.15, 0.42 + R() * 0.12));
-    addCollider(t.x - 0.25, t.x + 0.25, t.z - 0.25, t.z + 0.25, -1, 4, 0);
-  });
-  for (const m of [trunks, canopies]) { m.castShadow = true; m.receiveShadow = true; m.matrixAutoUpdate = false; m.updateMatrix(); m.computeBoundingSphere(); m.layers.enable(1); scene.add(m); }
-  // leaf cards: alpha-tested (+ alpha-to-coverage under MSAA), sharing the trees' instance matrices/colours
   const leafMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.62, metalness: 0, side: THREE.DoubleSide, vertexColors: true, alphaTest: 0.42, alphaToCoverage: true });
   const leafUni = { uScale: { value: 1 }, uP: { value: new THREE.Vector4() }, uCol2: { value: new THREE.Color(0) }, uWetAmt: { value: 0.3 }, extra: { tLeaf: { value: makeLeafAtlas() } } };
   leafMat.customProgramCacheKey = () => 'leaves';
   leafMat.onBeforeCompile = (shader) => patchMaterial(shader, PROC.leaves, leafUni, '', VERT.leaves);
-  const leaves = new THREE.InstancedMesh(makeLeafCards(blobDefs.map(([r, x, y, z]) => ({ r, x, y, z })), ctx.q?.foliage ?? 1), leafMat, nT);
-  leaves.instanceMatrix = canopies.instanceMatrix; leaves.instanceColor = canopies.instanceColor;
-  leaves.castShadow = false; leaves.receiveShadow = true; leaves.matrixAutoUpdate = false; leaves.updateMatrix(); leaves.computeBoundingSphere(); scene.add(leaves);
-  out.trees = { trunks, canopies, leaves };
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), col = new THREE.Color();
+  out.trees = { trunks: [], canopies: [], leaves: [] };
+  CROWNS.forEach((cr, vi) => {
+    const list = allTrees.filter((t) => t.v === vi), nV = list.length;
+    if (!nV) return;
+    const trunks = new THREE.InstancedMesh(buildTrunk(cr), trunkMat, nV), canopies = new THREE.InstancedMesh(buildCanopy(cr), canopyMat, nV);
+    list.forEach((t, i) => {
+      e.set(0, R() * 6.28, 0); q.setFromEuler(e); m4.compose(new THREE.Vector3(t.x, GY, t.z), q, new THREE.Vector3(t.s, t.s, t.s));
+      trunks.setMatrixAt(i, m4); canopies.setMatrixAt(i, m4);
+      canopies.setColorAt(i, col.setHSL(0.24 + (R() - 0.5) * 0.08, 0.55 + R() * 0.15, 0.42 + R() * 0.12));
+      addCollider(t.x - 0.25, t.x + 0.25, t.z - 0.25, t.z + 0.25, -1, 4, 0);
+    });
+    for (const m of [trunks, canopies]) { m.castShadow = true; m.receiveShadow = true; m.matrixAutoUpdate = false; m.updateMatrix(); m.computeBoundingSphere(); m.layers.enable(1); scene.add(m); }
+    // leaf cards: alpha-tested (+ alpha-to-coverage under MSAA), sharing the trees' instance matrices/colours
+    const leaves = new THREE.InstancedMesh(makeLeafCards(cr.blobs.map(([r, x, y, z]) => ({ r, x, y, z })), ctx.q?.foliage ?? 1, 4441 + vi * 97), leafMat, nV);
+    leaves.instanceMatrix = canopies.instanceMatrix; leaves.instanceColor = canopies.instanceColor;
+    leaves.castShadow = false; leaves.receiveShadow = true; leaves.matrixAutoUpdate = false; leaves.updateMatrix(); leaves.computeBoundingSphere(); scene.add(leaves);
+    out.trees.trunks.push(trunks); out.trees.canopies.push(canopies); out.trees.leaves.push(leaves);
+  });
+
 
   // ---------------------------------------------------------------- small furniture (merged)
   const K = new Kit();

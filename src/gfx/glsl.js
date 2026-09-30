@@ -381,22 +381,32 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
 
   carpaint: /* glsl */`
 uniform vec4 uP;                                           // x,y: door seams (m along the car), z: bonnet line, w: boot line
+uniform vec3 uCol2;                                        // x: rocker line height, y: shoulder line height, z: seam height limit
+uniform vec4 uArch;                                        // x,y: axle positions, z: wheel centre height, w: arch radius (the openings are cut pixel-exact in the shader)
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
+  float dA = min(length(vec2(p.x - uArch.x, p.y - uArch.z)), length(vec2(p.x - uArch.y, p.y - uArch.z)));
+  s.a = (abs(p.z) > 0.5 && dA < uArch.w) ? 0.0 : 1.0;
   float fp = length(fwidth(p.xz)) + 1e-4;
   float aw = max(0.0035, fp);
   float side = smoothstep(0.55, 0.8, abs(p.z) / 0.9);
-  float low = step(p.y, 1.32);
+  float low = step(p.y, uCol2.z);
   float seam = 0.0;
   seam = max(seam, smoothstep(aw, 0.0, abs(p.x - uP.x) - 0.0022) * low * side);
   seam = max(seam, smoothstep(aw, 0.0, abs(p.x - uP.y) - 0.0022) * low * side);
-  seam = max(seam, smoothstep(aw, 0.0, abs(p.x - uP.z) - 0.0022) * step(0.6, n.y + 0.4 * side));
-  seam = max(seam, smoothstep(aw, 0.0, abs(p.x - uP.w) - 0.0022) * step(0.6, n.y + 0.4 * side));
-  float sill = smoothstep(aw, 0.0, abs(p.y - 0.37) - 0.002) * side;                        // rocker line
-  float crease = smoothstep(0.02 + aw, 0.0, abs(p.y - 0.86)) * side;                        // shoulder highlight
+  float top = step(0.6, n.y + 0.4 * side);
+  seam = max(seam, smoothstep(aw, 0.0, abs(p.x - uP.z) - 0.0022) * top);
+  seam = max(seam, smoothstep(aw, 0.0, abs(p.x - uP.w) - 0.0022) * top);
+  float fend = step(uP.z, p.x) + step(p.x, uP.w);                                               // bonnet / boot panel: the shut line continues down each wing
+  seam = max(seam, smoothstep(aw, 0.0, abs(abs(p.z) - 0.66) - 0.0022) * step(0.7, n.y) * fend);
+  float sill = smoothstep(aw, 0.0, abs(p.y - uCol2.x) - 0.002) * side;                        // rocker line
+  float crease = smoothstep(0.02 + aw, 0.0, abs(p.y - uCol2.y)) * side;                        // shoulder highlight
   float flake = nz(p * 90.0).g;
-  s.alb *= (1.0 - 0.8 * max(seam, sill)) * (1.0 + 0.12 * crease) * (0.94 + 0.12 * flake);
+  float peel = nz(p * 340.0).b;
+  float archAO = 1.0 - 0.6 * smoothstep(uArch.w + 0.2, uArch.w, dA) * smoothstep(0.4, 0.7, abs(p.z));        // soft shadow around each wheel opening
+  s.alb *= (1.0 - 0.8 * max(seam, sill)) * (1.0 + 0.1 * crease) * (0.94 + 0.12 * flake);
+  s.ao = archAO;
   s.rough = mix(s.rough, 0.6, max(seam, sill));
-  s.h = (-max(seam, sill) * 0.0018 + (flake - 0.5) * 0.00006) * dfade(wp, 0.004);
+  s.h = (-max(seam, sill) * 0.0018 + (flake - 0.5) * 0.00006 + (peel - 0.5) * 0.00004) * dfade(wp, 0.004);
 }`,
 
   rubber: /* glsl */`

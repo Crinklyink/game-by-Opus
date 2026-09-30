@@ -183,6 +183,7 @@ export function pm(kind = 'plain', o = {}) {
   const params = { color: o.color ?? 0xffffff, roughness: o.rough ?? 0.6, metalness: o.metal ?? 0, envMapIntensity: o.env ?? 1 };
   if (o.emissive != null) { params.emissive = o.emissive; params.emissiveIntensity = o.emissiveI ?? 1; }
   if (o.side != null) params.side = o.side;
+  if (o.vertexColors) params.vertexColors = true;
   if (o.transparent) { params.transparent = true; params.opacity = o.opacity ?? 1; if (o.depthWrite === false) params.depthWrite = false; }
   if (o.alphaTest) params.alphaTest = o.alphaTest;
   if (o.glass) {   // clear glass: the surface adds its (Fresnel) reflections on top of what is behind it instead of being scaled by alpha
