@@ -1,0 +1,15 @@
+{
+  "name": "floor-48",
+  "version": "1.0.0",
+  "description": "Floor 48 - a detailed 3D high-rise life sim (Three.js, WebGL2)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node serve.mjs",
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "three": "0.170.0"
+  }
+}
