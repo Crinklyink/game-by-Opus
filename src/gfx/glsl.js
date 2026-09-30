@@ -103,16 +103,32 @@ vec3 skyColor(vec3 rd){
   return col;
 }
 
-vec3 applyFog(vec3 col, vec3 wp){
+float fogFactor(vec3 wp){
   vec3 v = wp - cameraPosition;
   float dist = length(v);
-  vec3 rd = v / max(dist, 1e-3);
   float a = uFogH;
   float dy = v.y;
   float t = abs(dy*a) < 1e-3 ? 1.0 : (1.0 - exp(-dy*a)) / (dy*a);
   float od = uFogDen * exp(-a*cameraPosition.y) * dist * t;
-  float f = 1.0 - exp(-od);
-  return mix(col, horizonCol(rd) * 0.94, f);
+  return 1.0 - exp(-od);
+}
+
+vec3 applyFog(vec3 col, vec3 wp){
+  vec3 rd = normalize(wp - cameraPosition);
+  return mix(col, horizonCol(rd) * 0.94, fogFactor(wp));
+}
+`;
+
+// Light-weight fog transmittance (for additive sprites) - no sky dependency.
+export const FOG_T = /* glsl */`
+uniform float uFogDen, uFogH;
+float fogTrans(vec3 wp){
+  vec3 v = wp - cameraPosition;
+  float dist = length(v);
+  float a = uFogH;
+  float dy = v.y;
+  float t = abs(dy*a) < 1e-3 ? 1.0 : (1.0 - exp(-dy*a)) / (dy*a);
+  return exp(-uFogDen * exp(-a*cameraPosition.y) * dist * t);
 }
 `;
 
@@ -161,16 +177,18 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
 }`,
 
   woodfurn: /* glsl */`
-uniform vec3 uCol2;
+uniform vec3 uCol2; uniform vec4 uP;
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
-  vec3 warp = nz(p*vec3(0.5,3.0,3.0)).rgb - 0.5;
-  float r = length(p.yz + warp.yz*0.08) * 38.0 + warp.x*2.0;
+  vec3 q = uP.x > 1.5 ? p.zyx : (uP.x > 0.5 ? p.yxz : p);       // grain runs along q.x
+  vec3 warp = nz(q*vec3(0.35,2.2,2.2)).rgb - 0.5;
+  float r = length(q.yz + warp.yz*0.022) * 26.0 + warp.x*0.7;
   float ring = fract(r);
-  ring = smoothstep(0.0,0.55,ring)*smoothstep(1.0,0.5,ring);
-  float fine = nz(p*vec3(1.5, 40.0, 40.0)).b;
-  s.alb = mix(s.alb, uCol2, ring*0.6 + fine*0.15);
+  ring = smoothstep(0.0,0.6,ring)*smoothstep(1.0,0.55,ring);
+  float fine = nz(q*vec3(1.2, 34.0, 34.0)).b;
+  float streak = nz(q*vec3(0.9, 90.0, 90.0)).a;
+  s.alb = mix(s.alb, uCol2, ring*0.5 + fine*0.14) * (0.94 + 0.1*streak);
   s.rough = 0.36 + 0.12*fine;
-  s.h = ((ring-0.5)*0.0002 + (fine-0.5)*0.00015) * dfade(wp, 0.005);
+  s.h = ((ring-0.5)*0.00018 + (fine-0.5)*0.00014) * dfade(wp, 0.005);
 }`,
 
   concrete: /* glsl */`
@@ -198,13 +216,15 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   marble: /* glsl */`
 uniform vec3 uCol2;
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
-  vec3 w = nz(p*0.7).rgb;
-  float v1 = nz(p*1.1 + w*0.9).r;
-  float line = smoothstep(0.04, 0.0, abs(v1 - 0.5));
-  float v2 = smoothstep(0.022, 0.0, abs(nz(p*3.3 + w*1.7).b - 0.5));
-  vec3 base = s.alb * (0.9 + 0.12*nz(p*4.0).r);
-  s.alb = mix(base, uCol2, line*0.7 + v2*0.28);
-  s.rough = mix(0.07, 0.2, nz(p*9.0).b) + line*0.05;
+  vec3 w = nz(p*0.33 + 0.11).rgb - 0.5;
+  float n1 = nz(p*0.45 + w*1.1).r;
+  float v1 = smoothstep(0.035, 0.0, abs(n1 - 0.5));
+  float n2 = nz(p*1.15 + w*0.7 + 3.0).b;
+  float v2 = smoothstep(0.02, 0.0, abs(n2 - 0.5)) * 0.65;
+  float cloud = nz(p*2.6).r;
+  vec3 base = s.alb * (0.9 + 0.14*cloud);
+  s.alb = mix(base, uCol2, clamp(v1*0.85 + v2*0.5, 0.0, 1.0));
+  s.rough = mix(0.06, 0.16, nz(p*7.0).b) + v1*0.04;
   s.h = 0.0;
 }`,
 
@@ -351,14 +371,17 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   rug: /* glsl */`
 uniform vec3 uCol2; uniform vec4 uP;
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
-  vec2 uv = p.xz;
-  float d1 = abs(fract(uv.x*uP.x)-0.5), d2 = abs(fract(uv.y*uP.x)-0.5);
-  float dia = abs(fract((uv.x+uv.y)*uP.x*0.5) - 0.5);
-  float pat = smoothstep(0.02,0.06,abs(dia-0.25)) ;
-  float big = smoothstep(0.02, 0.0, abs(nz(p*0.35).r - 0.5) - 0.02);
-  vec3 c = mix(uCol2, s.alb, pat);
+  vec2 q = p.xz;
+  float e = min(uP.y - abs(q.x), uP.z - abs(q.y));
+  float band1 = step(0.06, e) * step(e, 0.16);
+  float band2 = step(0.22, e) * step(e, 0.245);
+  vec2 g = fract(q*uP.x) - 0.5;
+  float dia = abs(g.x) + abs(g.y);
+  float field = smoothstep(0.34, 0.3, dia) * 0.16 * step(0.3, e);
+  vec3 c = mix(s.alb, uCol2, clamp(band1*0.9 + band2*0.7, 0.0, 1.0));
+  c *= 1.0 - field;
   float pile = nz(p*60.0).g;
-  s.alb = c * (0.82 + 0.28*pile) * (0.92 + 0.14*nz(p*1.7).r);
+  s.alb = c * (0.84 + 0.26*pile) * (0.93 + 0.12*nz(p*1.7).r);
   s.rough = 0.96;
   s.h = pile*0.0016*dfade(wp,0.004);
   s.ao = 0.72 + 0.28*pile;

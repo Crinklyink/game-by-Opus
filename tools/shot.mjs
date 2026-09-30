@@ -30,9 +30,8 @@ try {
   const err = await page.evaluate(() => window.__bootError);
   if (err) logs.push('BOOT ERROR: ' + err);
   else {
-    await page.waitForFunction((n) => window.__game.frames() >= n, +frames, { timeout: 240000 });
-    await page.waitForTimeout(300);
-    await page.screenshot({ path: out });
+    await page.evaluate((n) => window.__game.step(n), +frames);
+    await page.screenshot({ path: out, timeout: 120000 });
     logs.push('info: ' + JSON.stringify(await page.evaluate(() => window.__game.info())));
   }
 } catch (e) { logs.push('HARNESS ERROR: ' + e.message); }

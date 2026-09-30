@@ -61,11 +61,27 @@ async function boot() {
   resize();
   window.addEventListener('resize', resize);
 
-  // ---------- test scene ----------
-  const { buildTestScene } = await import('./world/testscene.js');
-  buildTestScene(scene);
+  // ---------- world ----------
+  const { GlowField } = await import('./gfx/glow.js');
+  const glow = new GlowField(4096); G.glow = glow; scene.add(glow.mesh);
+  const city = await import('./world/city.js');
+  city.buildGround(scene); city.buildHills(scene);
+  const sky = city.buildSkyline(scene, glow, q);
+  city.buildTowerShell(scene, glow);
+  log('skyline instances:', sky.count);
+  const { LightPool } = await import('./gfx/lights.js');
+  const pool = new LightPool(scene, q.lights); G.pool = pool;
+  const { rng } = await import('./core/util.js');
+  const { buildApartment } = await import('./world/apartment.js');
+  const apt = buildApartment(scene, { rand: rng(99), glow }); G.apt = apt;
+  const { InteriorProbe } = await import('./gfx/probe.js');
+  const { APT_Y } = await import('./world/consts.js');
+  const probe = q.probe ? new InteriorProbe(renderer, scene, new THREE.Vector3(-40, APT_Y + 1.5, 26), new THREE.Vector3(-49, APT_Y, 20.45), new THREE.Vector3(-31, APT_Y + 3.6, 32.4), 128) : null;
+  const { updateScreens } = await import('./world/screens.js');
+  log('colliders:', G.colliders.length, 'interactables:', (await import('./systems/interact.js')).Interact.items.length);
 
   G.time.hour = parseFloat(params.get('t') || '17.6');
+  { const h = G.time.hour; apt.setAllLights(h < 7.2 || h > 17.5); }
   if (params.has('rain')) { G.weather.target = G.weather.rain = parseFloat(params.get('rain')); G.weather.wet = G.weather.rain > 0 ? 1 : 0; }
 
   const cam = { x: 0, y: 1.7, z: 6, yaw: 0, pitch: 0 };
@@ -75,24 +91,35 @@ async function boot() {
 
   let last = performance.now(), elapsed = 0, frames = 0;
   const focus = new THREE.Vector3();
-  function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000); last = now; elapsed += dt; frames++;
+  function tick(dt) {
+    elapsed += dt; frames++;
     G.u.uTime.value = elapsed;
     applyCam();
     camera.updateMatrixWorld();
     focus.copy(camera.position);
     atmo.update(dt, elapsed, focus);
     for (const s of G.systems) s.update(dt, elapsed);
-    post.render(scene, camera, dt, elapsed, { glass: false });
+    pool.update(dt, camera.position);
+    apt.update(dt, elapsed);
+    updateScreens(dt, elapsed);
+    const inApt = camera.position.y > APT_Y - 1 && camera.position.x > -60 && camera.position.x < -20 && camera.position.z > 10 && camera.position.z < 40;
+    if (probe) probe.update(dt, inApt, frames === 2);
+    glow.flush();
+    post.render(scene, camera, dt, elapsed, { glass: true, expMin: 0.16, expKey: 0.19 });
+  }
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    tick(dt);
     requestAnimationFrame(frame);
   }
-  requestAnimationFrame(frame);
+  if (!TEST) requestAnimationFrame(frame);
 
   window.__game = {
     G, cam, applyCam, renderer, scene, camera, post, atmo,
     setTime: (h) => { G.time.hour = h; },
     setRain: (r) => { G.weather.target = r; G.weather.rain = r; G.weather.wet = r > 0 ? 1 : 0; },
     frames: () => frames,
+    step: (n = 1, dt = 0.05) => { for (let i = 0; i < n; i++) tick(dt); return frames; },
     info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, programs: renderer.info.programs?.length }),
   };
   window.__ready = true;
