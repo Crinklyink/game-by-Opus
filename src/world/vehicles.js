@@ -155,17 +155,27 @@ function buildParts(name, S) {
   parts.interior.push(T(new THREE.TorusGeometry(0.17, 0.014, 6, 16), S.driverX + 0.42, S.belt + 0.02, -0.4, 0, Math.PI / 2, 0, 1, 1, 1).rotateY(0));
   parts.driver.push(T(new THREE.SphereGeometry(0.11, 10, 8), S.driverX, S.belt + 0.42, -0.4));
   parts.driver.push(box(0.22, 0.42, 0.3, S.driverX - 0.05, seatY + 0.26, -0.4));
-  // wheels
+  // wheels: open tyre ring (so the alloy shows), alloy lip + spokes + hub + lug nuts, brake rotor and caliper behind
   const wheels = { tire: [], rim: [], disc: [] };
   const R = S.wheelR, W = 0.22;
-  const prof = [[0.0, -W / 2], [R - 0.13, -W / 2], [R - 0.045, -W * 0.5 + 0.01], [R, -W * 0.25], [R + 0.004, 0], [R, W * 0.25], [R - 0.045, W * 0.5 - 0.01], [R - 0.13, W / 2], [0.0, W / 2]];
-  const tireGeo = new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 28); tireGeo.rotateX(Math.PI / 2);
+  const hole = R * 0.62;
+  const prof = [[hole, -W * 0.46], [R - 0.09, -W / 2], [R - 0.035, -W * 0.42], [R, -W * 0.28], [R + 0.004, 0], [R, W * 0.28], [R - 0.035, W * 0.42], [R - 0.09, W / 2], [hole, W * 0.46], [hole, -W * 0.46]];
+  const tireGeo = new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 32); tireGeo.rotateX(Math.PI / 2);
   wheels.tire.push(tireGeo);
-  const rimR = R - 0.06;
-  wheels.rim.push(T(new THREE.CylinderGeometry(rimR, rimR, 0.03, 26), 0, 0, W / 2 - 0.02, Math.PI / 2, 0, 0));
-  for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; wheels.rim.push(box(rimR * 0.9, 0.05, 0.028, Math.cos(a) * rimR * 0.5, Math.sin(a) * rimR * 0.5, W / 2 - 0.005, 0, 0, a)); }
-  wheels.rim.push(T(new THREE.CylinderGeometry(0.05, 0.05, 0.04, 10), 0, 0, W / 2 + 0.005, Math.PI / 2, 0, 0));
-  wheels.disc.push(T(new THREE.CylinderGeometry(R * 0.72, R * 0.72, 0.02, 24), 0, 0, W / 2 - 0.09, Math.PI / 2, 0, 0));
+  const zf = W * 0.44;                                                      // alloy face depth (slightly recessed behind the sidewall)
+  wheels.rim.push(T(new THREE.RingGeometry(hole * 0.84, hole + 0.012, 32), 0, 0, W * 0.46 + 0.002));   // polished lip
+  wheels.rim.push(T(new THREE.CylinderGeometry(hole + 0.012, hole + 0.012, 0.05, 32, 1, true), 0, 0, W * 0.46 - 0.025, Math.PI / 2, 0, 0));   // barrel
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2, len = hole * 0.86;
+    wheels.rim.push(box(len, 0.055, 0.03, Math.cos(a) * len * 0.52, Math.sin(a) * len * 0.52, zf, 0, 0, a));                   // spoke
+    wheels.rim.push(box(len * 0.5, 0.036, 0.034, Math.cos(a + 0.32) * len * 0.72, Math.sin(a + 0.32) * len * 0.72, zf - 0.004, 0, 0, a + 0.32 + 0.5));   // twin spoke tip
+    wheels.rim.push(T(new THREE.CylinderGeometry(0.0085, 0.0085, 0.016, 8), Math.cos(a + 0.63) * 0.062, Math.sin(a + 0.63) * 0.062, zf + 0.022, Math.PI / 2, 0, 0));   // lug nut
+  }
+  wheels.rim.push(T(new THREE.CylinderGeometry(0.058, 0.066, 0.03, 20), 0, 0, zf + 0.012, Math.PI / 2, 0, 0));                     // hub
+  wheels.rim.push(T(new THREE.CylinderGeometry(0.03, 0.03, 0.012, 14), 0, 0, zf + 0.03, Math.PI / 2, 0, 0));                        // centre cap
+  wheels.disc.push(T(new THREE.CylinderGeometry(hole * 0.98, hole * 0.98, 0.016, 32), 0, 0, 0.02, Math.PI / 2, 0, 0));               // brake rotor
+  wheels.disc.push(T(new THREE.CylinderGeometry(hole * 0.98, hole * 0.98, 0.006, 32), 0, 0, W / 2 - 0.13, Math.PI / 2, 0, 0));       // dark backing so gaps never show the body
+  wheels.disc.push(box(0.09, 0.15, 0.06, hole * 0.6, 0, 0.055, 0, 0, 0.5));                                                         // caliper
   return { parts, wheels };
 }
 
@@ -244,7 +254,7 @@ export class CarType {
     this.mesh.plate = plates; this.plateCell = cell;
     scene.add(plates);
     this.wheelLocal = [];
-    for (const [ax, sg] of [[S.axleF, 1], [S.axleF, -1], [S.axleR, 1], [S.axleR, -1]]) this.wheelLocal.push({ x: ax, z: sg * S.track, sg, front: ax === S.axleF });
+    for (const [ax, sg] of [[S.axleF, 1], [S.axleF, -1], [S.axleR, 1], [S.axleR, -1]]) this.wheelLocal.push({ x: ax, z: sg * (S.hw - 0.075), sg, front: ax === S.axleF });   // outer tyre face just proud of the body so the wheel shows in its arch
     this._m = new THREE.Matrix4(); this._w = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._e = new THREE.Euler(); this._v = new THREE.Vector3(); this._s = new THREE.Vector3(1, 1, 1);
     this._c = new THREE.Color();
     this.mesh.sedanSign = this.mesh.sign;

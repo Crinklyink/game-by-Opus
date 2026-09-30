@@ -42,7 +42,7 @@ void main(){
 const FRAG = /* glsl */`
 uniform vec3 uTint; varying vec4 dummy;
 varying float vA;
-void main(){ gl_FragColor = vec4(uTint, vA * 0.55); }`.replace('varying vec4 dummy;\n', '');
+void main(){ gl_FragColor = vec4(uTint, vA * 0.7); }`.replace('varying vec4 dummy;\n', '');
 
 export class Weather {
   constructor(scene, q) {
@@ -134,6 +134,7 @@ export class Weather {
     const rain = W.rain;
     u.uCenter.value.copy(cam);
     u.uAspect.value = camera.aspect;
+    u.uThick.value = 2.2 / Math.max(360, G.u.uRes.value.y);       // ~1 px wide streaks at any render resolution
     let inten = rain * (outdoors || inApt ? 1 : 0);
     // when looking from the apartment interior, rain only exists outside the window plane
     u.uClipOn.value = inApt ? 1 : 0; u.uClipZ.value = 20.3;

@@ -19,11 +19,15 @@ import { WALK_Y } from './street.js';
 PROC.checker = /* glsl */`
 uniform vec3 uCol2; uniform vec4 uP;
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
-  float c = mod(floor(p.x / uP.x) + floor(p.z / uP.x), 2.0);
-  vec2 f = abs(fract(p.xz / uP.x) - 0.5) * uP.x;
-  float g = smoothstep(0.0, 0.004, uP.x*0.5 - max(f.x, f.y));
-  s.alb = mix(uCol2, s.alb, c) * (0.85 + 0.15*g) * (0.94 + 0.08*nz(p*4.0).r);
-  s.rough = 0.16 + 0.08*nz(p*9.0).b; s.h = -(1.0-g)*0.001;
+  vec2 q = abs(n.y) > 0.5 ? p.xz : (abs(n.x) > abs(n.z) ? p.zy : p.xy);      // floor tiles or a wall strip
+  float c = mod(floor(q.x / uP.x) + floor(q.y / uP.x), 2.0);
+  vec2 f = abs(fract(q / uP.x) - 0.5) * uP.x;
+  float fpx = length(fwidth(q));
+  float gw = max(0.004, fpx * 1.3);
+  float g = smoothstep(0.0, gw, uP.x*0.5 - max(f.x, f.y));
+  float gd = (1.0 - g) * min(1.0, 0.008 / gw);
+  s.alb = mix(uCol2, s.alb, c) * (1.0 - 0.15*gd) * (0.94 + 0.08*nz(p*4.0).r);
+  s.rough = 0.16 + 0.08*nz(p*9.0).b; s.h = 0.0;
 }`;
 PROC.product = /* glsl */`
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
@@ -205,6 +209,56 @@ export function buildBurger(scene, glow, ctx) {
     menuBoard('COMBOS', [['Classic Combo', '$13.50'], ['Double Combo', '$16.00'], ['Kids Meal', '$7.50'], ['Garden Salad', '$9.00']]),
   ];
   boards.forEach((b, i) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.35), b.mat); m.position.set(28 + i * 7, 2.85, z0 + 0.4); par.add(m); b.visible = true; K.box(M.blackMetal, 3.7, 1.45, 0.05, 28 + i * 7, 2.13, z0 + 0.36); });
+  // ---- side-wall booths (axis along z) ----
+  const sideBooth = (xc, zc) => {
+    for (const sg of [-1, 1]) { K.box(vinyl, 1.5, 0.45, 0.7, xc, 0, zc + sg * 1.0, { r: 0.05 }); K.box(vinyl, 1.5, 0.9, 0.16, xc, 0.3, zc + sg * 1.28, { r: 0.05 }); }
+    K.box(tableTop, 1.3, 0.05, 0.85, xc, 0.72, zc, { r: 0.01 }); K.cyl(M.steel, 0.05, 0.08, 0.72, xc, 0, zc, { seg: 8 });
+    K.box(M.chrome, 0.05, 0.13, 0.05, xc - 0.2, 0.77, zc - 0.15); K.box(M.chrome, 0.07, 0.1, 0.08, xc + 0.2, 0.77, zc + 0.15);
+    K.box(pm('paper', {}), 0.28, 0.02, 0.28, xc, 0.77, zc + 0.02, {});
+    addCollider(xc - 0.85, xc + 0.85, zc - 1.42, zc + 1.42, 0, 1.2, 0);
+  };
+  for (const zc of [-26.6, -22.3, -18.0]) sideBooth(19.25, zc);
+  for (const zc of [-26.6, -22.3]) sideBooth(50.75, zc);
+  // checkerboard band above the teal wainscot + warm LED cove under the ceiling
+  const band = pm('checker', { color: 0xf1efe8, col2: 0x151517, p: [0.12, 0, 0, 0], rough: 0.4, interior: true });
+  K.box(band, x1 - x0 - 0.7, 0.24, 0.02, (x0 + x1) / 2, 1.36, z0 + 0.365);
+  for (const sx of [x0 + 0.365, x1 - 0.365]) K.box(band, 0.02, 0.24, z1 - z0 - 0.7, sx, 1.36, (z0 + z1) / 2);
+  const cove = pm('plain', { color: 0x050505, emissive: 0xffb070, emissiveI: 2.4, interior: true });
+  K.box(cove, x1 - x0 - 1.0, 0.03, 0.07, (x0 + x1) / 2, H - 0.3, z0 + 0.42);
+  for (const sx of [x0 + 0.42, x1 - 0.42]) K.box(cove, 0.07, 0.03, z1 - z0 - 1.0, sx, H - 0.3, (z0 + z1) / 2);
+  // retro sunburst posters on the side walls
+  const posterTex = (l1, l2, c1, c2) => canvasTex(256, 330, (c, w, h) => {
+    c.fillStyle = c1; c.fillRect(0, 0, w, h);
+    c.save(); c.translate(w / 2, h * 0.5);
+    for (let i = 0; i < 18; i++) { c.rotate(Math.PI / 9); c.fillStyle = i % 2 ? c2 : c1; c.beginPath(); c.moveTo(0, 0); c.lineTo(-46, -260); c.lineTo(46, -260); c.closePath(); c.fill(); }
+    c.restore();
+    c.fillStyle = '#fff6e0'; c.beginPath(); c.arc(w / 2, h * 0.5, 72, 0, Math.PI * 2); c.fill();
+    c.fillStyle = c1; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.font = '900 38px "Arial Black", Impact, sans-serif'; c.fillText(l1, w / 2, h * 0.5 - 8);
+    c.font = '700 21px Arial'; c.fillText(l2, w / 2, h * 0.5 + 26);
+    c.fillStyle = '#fff6e0'; c.fillRect(0, h - 46, w, 46); c.fillStyle = c1; c.font = '800 21px Arial'; c.fillText('BIG STACK BURGERS', w / 2, h - 23);
+  }, { srgb: true });
+  const posters = [['SHAKES', 'thick & cold', '#c8322b', '#e8853a'], ['FRIES', 'golden crisp', '#d8952a', '#c8322b'], ['COLA', 'ice cold', '#1f6f8a', '#3aa6a0'], ['BURGERS', 'stacked high', '#3a7d44', '#d8952a'], ['PIE', 'fresh daily', '#8a3a7a', '#d8952a'], ['COFFEE', 'bottomless', '#4a3020', '#c8322b']];
+  const hang = (i, x, z, ry) => {
+    const [a, b, c1, c2] = posters[i % posters.length];
+    const pm2 = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.22), new THREE.MeshStandardMaterial({ map: posterTex(a, b, c1, c2), roughness: 0.7 }));
+    pm2.position.set(x + Math.sin(ry) * 0.016, 2.55, z); pm2.rotation.y = ry; par.add(pm2);      // print sits proud of a slim chrome frame slab
+    K.box(M.chrome, 0.02, 1.3, 1.03, x, 1.9, z);
+  };
+  [-27.6, -21.2, -17.6].forEach((z, i) => hang(i, x0 + 0.385, z, Math.PI / 2));
+  [-27.6, -24.5, -21.4, -18.3].forEach((z, i) => hang(i + 3, x1 - 0.385, z, -Math.PI / 2));
+  // wall clock over the pass
+  const clockTex = canvasTex(256, 256, (c, w, h) => {
+    c.fillStyle = '#f6f2e6'; c.beginPath(); c.arc(128, 128, 124, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#1a1a1a'; c.font = '700 26px Arial'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    for (let i = 1; i <= 12; i++) { const a = (i / 12) * Math.PI * 2 - Math.PI / 2; c.fillText(String(i), 128 + Math.cos(a) * 96, 128 + Math.sin(a) * 96); }
+    c.strokeStyle = '#1a1a1a'; c.lineCap = 'round'; c.lineWidth = 8; c.beginPath(); c.moveTo(128, 128); c.lineTo(128 - 20, 128 - 48); c.stroke();
+    c.lineWidth = 5; c.beginPath(); c.moveTo(128, 128); c.lineTo(128 + 62, 128 - 26); c.stroke();
+    c.strokeStyle = '#c8322b'; c.lineWidth = 2; c.beginPath(); c.moveTo(128, 128); c.lineTo(128 + 10, 128 + 78); c.stroke();
+  }, { srgb: true });
+  const clock = new THREE.Mesh(new THREE.CircleGeometry(0.33, 40), new THREE.MeshStandardMaterial({ map: clockTex, roughness: 0.4 }));
+  clock.position.set(47.5, 3.55, z0 + 0.4); par.add(clock);
+  K.torus(chromeS, 0.34, 0.03, 47.5, 3.55, z0 + 0.4, { seg: 40, seg2: 8 });
   K.mesh(par, { reflect: true });
   glassBox(par, 35, 0.85 + 1.35, z1 - 0.16, 30, 2.7, 'z');
   // roof: big neon sign
@@ -226,15 +280,19 @@ export function buildBurger(scene, glow, ctx) {
   burger.mesh(par, {});
   // lights
   const em = (x, y, z, c, i, d) => LightPool.add({ pos: new THREE.Vector3(x, y, z), color: c, intensity: i, distance: d, levelY: 0, levelRange: 12, zone: 'burger' });
-  em(26, 3.2, -20, 0xffd6a0, 120, 14); em(44, 3.2, -20, 0xffd6a0, 120, 14); em(35, 3.4, -32, 0xffe6c4, 110, 12); em(35, 3.0, -15, 0xffd6a0, 90, 10); em(32, 3.4, -20.5, 0xff5a8a, 60, 10); em(49, 1.4, -14.4, 0xffcc60, 40, 6);
+  em(26, 3.2, -20, 0xffd6a0, 120, 14); em(44, 3.2, -20, 0xffd6a0, 120, 14); em(35, 3.4, -32, 0xffe6c4, 110, 12); em(35, 3.0, -15, 0xffd6a0, 90, 10); em(35, 3.2, -33.4, 0xff5a8a, 42, 8); em(49, 1.4, -14.4, 0xffcc60, 40, 6);
   // NPCs
   const npcs = [];
   if (G.people) {
-    npcs.push(G.people.add({ x: 35.2, z: -30.4, y0: 0, yaw: Math.PI, shirt: 0xd43a2a, pants: 0x1c1c1c, hair: 0x2a1a10, skin: 0xe0ac86, mode: 'idle' }));   // cashier
+    npcs.push(G.people.add({ x: 35.2, z: -30.4, y0: 0, yaw: 0, shirt: 0xd43a2a, pants: 0x1c1c1c, hair: 0x2a1a10, skin: 0xe0ac86, mode: 'idle' }));   // cashier
     npcs.push(G.people.add({ x: 26.5, z: -33.6, y0: 0, yaw: Math.PI, shirt: 0xf3f0e6, pants: 0x1c1c1c, hair: 0x141010, skin: 0xc68863, mode: 'idle' }));   // cook
     npcs.push(G.people.add({ x: 22.4 + 1.0, z: -15.6, seat: 0.46, yaw: -Math.PI / 2, shirt: 0x2a3a52, pants: 0x3a4256, hair: 0x8a6a3a, mode: 'idle', sit: true }));
     npcs.push(G.people.add({ x: 22.4 + 4.9 - 1.0, z: -15.6, seat: 0.46, yaw: Math.PI / 2, shirt: 0x8a2c34, pants: 0x1c1c1c, hair: 0x141010, skin: 0x9b6a48, mode: 'idle', sit: true }));
     npcs.push(G.people.add({ x: 41.4, z: -15.6, seat: 0.46, yaw: -Math.PI / 2, shirt: 0x2e5a48, pants: 0x3a4256, hair: 0xc9b070, skin: 0xf1c9a5, mode: 'idle', sit: true }));
+    npcs.push(G.people.add({ x: 19.25, z: -26.6 - 1.0, seat: 0.46, yaw: 0, shirt: 0xc9a23a, pants: 0x2a2a34, hair: 0x2a1a10, skin: 0xd9a37e, mode: 'idle', sit: true }));
+    npcs.push(G.people.add({ x: 19.25, z: -26.6 + 1.0, seat: 0.46, yaw: Math.PI, shirt: 0x5a3a7a, pants: 0x1c1c1c, hair: 0x8a5a2a, skin: 0xf1c9a5, mode: 'idle', sit: true }));
+    npcs.push(G.people.add({ x: 50.75, z: -22.3 - 1.0, seat: 0.46, yaw: 0, shirt: 0x3a7a5a, pants: 0x3a4256, hair: 0x141010, skin: 0x8a5a3a, mode: 'idle', sit: true }));
+    npcs.push(G.people.add({ x: 28.6, z: -26.6, y0: 0, yaw: 0, shirt: 0x2a3a52, pants: 0x3a3a3a, hair: 0x6a4a2a, skin: 0xe0ac86, mode: 'idle' }));   // waiting at the counter
   }
   // interaction: order at the register
   Interact.add({ pos: new THREE.Vector3(35, 1.4, -27.6), r: 1.6, maxDist: 3.2, label: () => 'Order food at the counter', act: () => G.game?.openBurger?.() });
