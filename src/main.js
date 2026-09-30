@@ -9,7 +9,7 @@ import { Atmosphere } from './gfx/sky.js';
 import { PostFX } from './gfx/postfx.js';
 import { GlowField } from './gfx/glow.js';
 import { LightPool } from './gfx/lights.js';
-import { initSdfUniforms, bakeSdf, SDF } from './gfx/sdf.js';
+import { initSdfUniforms, bakeSdf, activateSdf, SDF } from './gfx/sdf.js';
 import { PlanarReflection } from './gfx/planar.js';
 import { InteriorProbe } from './gfx/probe.js';
 import { setInteriorEnv } from './gfx/materials.js';
@@ -127,13 +127,17 @@ async function boot() {
   await step(0.56, 'Starting traffic', async () => { W.traffic = new Traffic(scene, glow, q, {}); G.traffic = W.traffic; });
   await step(0.66, 'Furnishing the apartment', async () => { W.apt = buildApartment(scene, { rand: rng(99), glow }); G.apt = W.apt; });
   await step(0.76, 'Installing the elevator', async () => { W.elevator = buildElevator(scene); G.elevator = W.elevator; W.lobby = buildLobby(scene, { rand: rng(31) }); });
-  await step(0.8, 'Baking the interior light volume', async () => {
-    if (!q.sdf) return;
-    bakeSdf(G.occ, { min: new THREE.Vector3(-51, APT_Y - 0.7, 13), max: new THREE.Vector3(-17, APT_Y + 4.3, 38.5), voxel: q.sdfVoxel, emitters: G.emitters, floorY: APT_Y, ceilH: CEIL_H, ceilZ0: 20.45 });
-    G.u.uSdfCfg.value.set(1, q.sdfAO, 0.035, 0.005);
-    log('light volume:', SDF.count, 'occluders,', SDF.ms + 'ms');
-  });
   await step(0.84, 'Opening the shops', async () => { W.shops = { burger: buildBurger(scene, glow, { rand: rng(51) }), grocery: buildGrocery(scene, glow, { rand: rng(52) }) }; });
+  await step(0.88, 'Baking the interior light volumes', async () => {
+    if (!q.sdf) return;
+    const V = (x, y, z) => new THREE.Vector3(x, y, z), vox = q.sdfVoxel, em = G.emitters;
+    bakeSdf(G.occ, { name: 'apt', min: V(-51, APT_Y - 0.7, 13), max: V(-17, APT_Y + 4.3, 38.5), voxel: vox, emitters: em, floorY: APT_Y, ceilH: CEIL_H, ceilZ0: 20.45, cfg: { bounce: 0.035, floor: 0.005, sun: 0.1 } });
+    bakeSdf(G.occ, { name: 'lobby', min: V(-54, -0.7, 18.5), max: V(-20, 7.6, 38.5), voxel: vox * 1.3, emitters: em, floorY: 0, cfg: { bounce: 0.05, floor: 0.02, sun: 0.4 } });
+    bakeSdf(G.occ, { name: 'burger', min: V(16, -0.7, -38), max: V(54, 6.2, -10), voxel: vox * 1.3, emitters: em, floorY: 0, cfg: { bounce: 0.11, floor: 0.15, sun: 0.25 } });
+    bakeSdf(G.occ, { name: 'grocery', min: V(16, -0.7, 10), max: V(66, 7.4, 44), voxel: vox * 1.45, emitters: em, floorY: 0, cfg: { bounce: 0.1, floor: 0.16, sun: 0.25 } });
+    G.u.uSdfCfg.value.set(0, q.sdfAO, 0.035, 0.005);
+    log('light volumes:', Object.values(SDF.volumes).map((v) => `${v.name} ${v.count}occ ${v.ms}ms (splat ${v.splatMs})`).join(' | '));
+  });
   await step(0.9, 'Details and weather', async () => {
     W.weatherSys = new Weather(scene, q);
     W.upgrades = buildUpgrades(scene, W.apt, W.apt.kitchen || { coffeePos: new THREE.Vector3(-31.4, APT_Y + 0.926, 30.2) });
@@ -208,6 +212,11 @@ async function boot() {
     { const zn = game.zone ? game.zone.name : 'apartment'; LightPool.zone = (zn === 'apartment' || zn === 'balcony') ? 'apartment' : (zn === 'park' || zn === 'street') ? 'street' : zn;
       const want = (zn === 'apartment' || zn === 'balcony' || zn === 'hall') && probe && probe.env ? 'probe' : 'room';
       if (want !== envMode) { envMode = want; setInteriorEnv(want === 'probe' ? probe.env.texture : roomEnv); } }
+    if (SDF.ready) {   // the interior volume nearest the camera drives the interior shaders
+      const c = camera.position; let pick = null;
+      for (const v of Object.values(SDF.volumes)) if (c.x > v.min.x - 8 && c.x < v.max.x + 8 && c.y > v.min.y - 6 && c.y < v.max.y + 6 && c.z > v.min.z - 8 && c.z < v.max.z + 8) { pick = v.name; break; }
+      activateSdf(pick);
+    }
     pool.update(dt, camera.position, camera);
     if (probe && render) probe.update(dt, inApt(), frames === 2);
     if (started) { const h = player.hover; ui.setPrompt(h ? (typeof h.label === 'function' ? h.label() : h.label) : null); }

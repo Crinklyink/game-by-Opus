@@ -109,8 +109,8 @@ export function buildLobby(scene, ctx) {
   ck.box(M.walnut, 1.6, 0.05, 0.4, 0, 0.8, 0, { r: 0.006 }); for (const s of [-1, 1]) ck.box(M.blackMetal, 0.04, 0.8, 0.36, s * 0.75, 0, 0);
   F.finish(par, ck, -21.6 - 1.6, 0, Z1 - 0.3, Math.PI);
   // wall art
-  F.artwork(par, 2.0, X1 - 0.18, 27.5, -Math.PI / 2, 2.6, 1.7, 0, 'brass');
-  F.artwork(par, 2.0, X0 + 0.16, 29.5, Math.PI / 2, 2.2, 1.5, 2, 'black');
+  F.artwork(par, X1 - 0.18, 1.4, 27.5, -Math.PI / 2, 2.6, 1.7, 0, 'brass');
+  F.artwork(par, X0 + 0.16, 1.5, 29.5, Math.PI / 2, 2.2, 1.5, 2, 'black');
   // decorative closed elevators + fire door
   for (const x of [-30.0, -22.9]) { A.box(M.steel, 1.4, 2.4, 0.06, x, 0, Z1 - 0.06, { r: 0.004 }); A.box(M.blackMetal, 0.01, 2.3, 0.07, x, 0.05, Z1 - 0.06); }
   // chandelier: a cloud of glass orbs
@@ -136,7 +136,7 @@ export function buildLobby(scene, ctx) {
   out.lights = lights;
 
   // ---------------- lobby windows (glass pane, static transparent) ----------------
-  const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xaac0c8, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false, envMapIntensity: 2.2, clearcoat: 1, clearcoatRoughness: 0.02 });
+  const glassMat = pm('plain', { color: 0x0a1518, rough: 0.02, glass: true, opacity: 0.1, side: THREE.DoubleSide, env: 2.2 });
   const gw = (X1 - X0) / glassBays;
   const fa = dx0 - 0.14, fb = dx1 + 0.14;            // door frame edges: glass stops here
   for (let i = 0; i < glassBays; i++) {
@@ -155,7 +155,7 @@ export function buildLobby(scene, ctx) {
   const transom = new THREE.Mesh(new THREE.PlaneGeometry(dx1 - dx0 + 0.2, H - 3.5 - 0.5), glassMat);
   transom.position.set(-40, 3.5 + (H - 3.5 - 0.5) / 2 + 0.1, Z0 - 0.02); par.add(transom);
   // sliding doors: two glass leaves
-  const leafMat = new THREE.MeshPhysicalMaterial({ color: 0xaac0c8, roughness: 0.04, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false, envMapIntensity: 2 });
+  const leafMat = pm('plain', { color: 0x0a1518, rough: 0.02, glass: true, opacity: 0.12, side: THREE.DoubleSide, env: 2 });
   const leaf = [];
   for (const s of [-1, 1]) {
     const g = new THREE.Group(); const w = (dx1 - dx0) / 2;

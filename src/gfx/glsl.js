@@ -145,9 +145,11 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   plaster: /* glsl */`
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   vec4 a = nz(p*0.31); vec4 b = nz(p*2.3+0.2); vec4 c = nz(p*19.0);
-  s.alb *= 0.9 + 0.16*a.r + 0.05*b.b;
-  s.rough = 0.8 + 0.12*b.r;
-  s.h = ((c.b-0.5)*0.0006 + (b.r-0.5)*0.0012) * dfade(wp, 0.01);
+  vec4 d = nz(p*vec3(9.0, 0.55, 9.0) + 1.7);                        // vertical roller streaks
+  float stain = smoothstep(0.55, 0.88, nz(p*0.7 + 3.1).g);           // faint cloudy patches
+  s.alb *= (0.84 + 0.24*a.r + 0.07*b.b + 0.06*(d.g - 0.5)) * (1.0 - stain*0.08);
+  s.rough = 0.76 + 0.16*b.r;
+  s.h = ((c.b - 0.5)*0.0009 + (b.r - 0.5)*0.0016 + (d.r - 0.5)*0.0005) * dfade(wp, 0.01);
 }`,
 
   woodfloor: /* glsl */`
@@ -166,18 +168,22 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   float gw = max(0.0024, aa * 1.3);                               // joints widen to a pixel, keeping their average darkness
   float gv = smoothstep(0.0, gw, edge);
   float dark = (1.0 - gv) * min(1.0, 0.0048 / gw);
+  float bev = smoothstep(gw*0.9, gw*1.7, edge) * (1.0 - smoothstep(gw*1.7, gw*3.6, edge));   // chamfer catching the light beside each joint
   float hf = 1.0 - smoothstep(0.01, 0.06, aa);                    // fine grain fades with distance instead of sparkling
   float g1 = nz(vec3(xx*0.22 + rnd*13.0, q.y*6.5, rnd*7.0)).r;
   float g2 = mix(0.5, nz(vec3(xx*0.9 + rnd*3.0, q.y*26.0, rnd*2.0+0.5)).b, hf);
   float ring = fract(g1*7.5 + g2*1.3);
   ring = mix(0.5, smoothstep(0.0, 0.5, ring)*smoothstep(1.0, 0.55, ring), hf);
-  float tone = mix(0.78, 1.14, hash21(vec2(col+0.3, row)*1.7));
-  vec3 wood = mix(s.alb, uCol2, ring*0.55 + g2*0.2) * tone;
+  float tone = mix(0.64, 1.22, hash21(vec2(col+0.3, row)*1.7));   // plank-to-plank spread
+  float drift = nz(vec3(xx*0.35, q.y*0.9, rnd*5.0)).g;            // slow colour drift along each board
+  vec3 wood = mix(s.alb, uCol2, clamp(ring*0.6 + g2*0.22 + (drift - 0.5)*0.4, 0.0, 1.0)) * tone;
+  wood *= mix(vec3(1.07, 0.98, 0.87), vec3(0.94, 1.0, 1.08), hash21(vec2(row + 3.1, col*0.31)));   // warmer / cooler boards
   float kn = nz(vec3(xx*1.5+rnd*30.0, q.y*11.0, rnd)).g;
-  wood *= 1.0 - smoothstep(0.88, 0.96, kn)*0.4*hf;
-  s.alb = wood * (1.0 - 0.7*dark);
-  s.rough = mix(0.3, 0.46, g2) + dark*0.45;
-  s.h = (-dark*0.0016 + (ring-0.5)*0.00025 + (g2-0.5)*0.0002) * dfade(wp, 0.01);
+  wood *= 1.0 - smoothstep(0.88, 0.96, kn)*0.45*hf;
+  float wear = smoothstep(0.42, 0.8, nz(vec3(wp.x*0.22, 0.3, wp.z*0.22)).r);    // broad patches where the lacquer has dulled
+  s.alb = wood * (1.0 - 0.72*dark) * (1.0 + 0.12*bev);
+  s.rough = mix(0.26, 0.5, g2) + dark*0.45 + wear*0.18;
+  s.h = (-dark*0.0018 + (ring - 0.5)*0.0004 + (g2 - 0.5)*0.0003 + bev*0.0005) * dfade(wp, 0.01);
 }`,
 
   woodfurn: /* glsl */`
@@ -241,12 +247,13 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   vec2 uv = (an.y > an.x && an.y > an.z) ? p.xz : (an.x > an.z ? p.zy : p.xy);
   float low = nz(p*4.5).r;
   float nub = nz(p*70.0).g;
+  float nub2 = nz(p*170.0).b;
   float weave = sin(uv.x*900.0)*sin(uv.y*900.0);
   float fd = dfade(wp, 0.004);
-  s.alb *= (0.88 + 0.2*low) * (0.94 + 0.1*nub);
-  s.rough = 0.93;
-  s.h = (nub*0.0011 + weave*0.00012) * fd;
-  s.ao = 0.85 + 0.15*nub;
+  s.alb *= (0.85 + 0.26*low) * (0.92 + 0.14*nub);
+  s.rough = 0.92;
+  s.h = (nub*0.0018 + nub2*0.0008 + weave*0.00014) * fd;
+  s.ao = 0.8 + 0.2*nub;
 }`,
 
   leather: /* glsl */`
@@ -286,11 +293,14 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   float gw = max(uP.z, fpx * 1.3);                                   // grout widens to a pixel but keeps its average darkness
   float g = smoothstep(gw*0.25, gw*0.5, e);
   float gd = (1.0 - g) * min(1.0, uP.z / gw);
+  float bev = smoothstep(gw*0.5, gw*1.0, e) * (1.0 - smoothstep(gw*1.0, gw*2.6, e));    // glazed bevel along each tile edge
   float r = hash21(cell);
-  vec3 tc = s.alb * (0.93 + 0.1*r);
-  s.alb = mix(uCol2, tc, 1.0 - gd);
-  s.rough = mix(0.9, 0.1 + 0.07*r, 1.0 - gd);
-  s.h = (-gd*0.0008*(1.0 - smoothstep(0.003, 0.012, fpx)) + (r-0.5)*0.0002) * dfade(wp, 0.01);
+  float warp = nz(vec3(uv*2.2 + cell*5.7, r*9.0)).r - 0.5;            // tiles are never perfectly flat: it makes reflections wander
+  vec3 tc = s.alb * (0.9 + 0.16*r + 0.04*warp);
+  float dirt = smoothstep(0.3, 0.0, e) * (0.6 + 0.4*nz(p*14.0).g);
+  s.alb = mix(uCol2 * (1.0 - 0.25*dirt), tc * (1.0 + 0.06*bev), 1.0 - gd);
+  s.rough = mix(0.9, 0.08 + 0.07*r + 0.05*(warp+0.5), 1.0 - gd);
+  s.h = (-gd*0.0009*(1.0 - smoothstep(0.003, 0.012, fpx)) + (r - 0.5)*0.0002 + warp*0.0007 + bev*0.0006) * dfade(wp, 0.01);
 }`,
 
   brick: /* glsl */`

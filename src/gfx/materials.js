@@ -16,7 +16,7 @@ const cache = new Map();
 export const interiorMats = new Set();
 
 const SHARED = ['uNoise3', 'uTime', 'uNight', 'uWet', 'uSunDir', 'uMoonDir', 'uZenith', 'uHorizon', 'uSunCol', 'uGlowCol',
-  'uCityGlow', 'uCloudCov', 'uCloudDark', 'uDisk', 'uFogDen', 'uFogH', 'uFlash', 'tSdf', 'tVis', 'uSdfMin', 'uSdfInv', 'uSdfCfg', 'uSdfDbg'];
+  'uCityGlow', 'uCloudCov', 'uCloudDark', 'uDisk', 'uFogDen', 'uFogH', 'uFlash', 'tSdf', 'tVis', 'uSdfMin', 'uSdfInv', 'uSdfCfg', 'uSdfCfg2', 'uSdfDbg'];
 
 const VERT_HEAD = 'varying vec3 vWPos; varying vec3 vLocal; varying vec3 vWNormal; varying vec2 vUvP;';
 const VERT_INJECT = /* glsl */`

@@ -15,7 +15,7 @@ export function palette() {
     wallBlue: pm('plaster', { color: 0x2f3f52, ...I }),
     ceiling: pm('plaster', { color: 0xf1eee7, ...I }),
     trim: pm('paint', { color: 0xf3f0e9, rough: 0.45, ...I }),
-    floor: pm('woodfloor', { color: 0xc9a373, col2: 0x7c5430, p: [0.19, 1.7, 0, 0], physical: true, clearcoat: 0.3, ccRough: 0.22, ...I }),
+    floor: pm('woodfloor', { color: 0xbe9b70, col2: 0x6f4d2e, p: [0.19, 1.7, 0, 0], physical: true, clearcoat: 0.3, ccRough: 0.22, ...I }),
     floorDark: pm('woodfloor', { color: 0x6a4a30, col2: 0x2e1c0f, p: [0.14, 1.2, 0, 0], physical: true, clearcoat: 0.3, ccRough: 0.25, ...I }),
     oak: pm('woodfurn', { color: 0xcfa872, col2: 0x84592e, ...I }),
     walnut: pm('woodfurn', { color: 0x6b4229, col2: 0x2c170b, physical: true, clearcoat: 0.2, ccRough: 0.3, ...I }),

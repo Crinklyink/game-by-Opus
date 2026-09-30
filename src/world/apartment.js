@@ -123,8 +123,9 @@ export function buildApartment(scene, ctx) {
   // ---- hallway ----
   wall(HALL_X0 - 0.25, HALL_X0, HALL_Z0, HALL_Z1, Y, CH, M.wallDark);              // west end
   wall(HALL_X0, HALL_X1, HALL_Z0, HALL_Z0 + 0.25, Y, CH, M.wallDark, false);        // north (shared with unit south)
-  A.box(M.walnut, HALL_X1 - HALL_X0, 1.05, 0.03, (HALL_X0 + HALL_X1) / 2, Y + 0.1, HALL_Z0 + 0.0 + 0.0);
-  addCollider(HALL_X0, HALL_X1, HALL_Z0 - 0.05, HALL_Z0, Y, Y + 3, 1);
+  A.box(M.walnut, HALL_X1 - HALL_X0, 1.05, 0.03, (HALL_X0 + HALL_X1) / 2, Y, HALL_Z0 + 0.25 + 0.015);
+  A.box(M.brass, HALL_X1 - HALL_X0, 0.02, 0.035, (HALL_X0 + HALL_X1) / 2, Y + 1.05, HALL_Z0 + 0.25 + 0.018);
+  addCollider(HALL_X0, HALL_X1, HALL_Z0 - 0.05, HALL_Z0 + 0.25, Y, Y + 3, 1);
   // south wall with elevator opening x -27.1..-24.9
   wall(HALL_X0, -27.1, HALL_Z1, HALL_Z1 + 0.3, Y, CH, M.wallDark); wall(-24.9, HALL_X1, HALL_Z1, HALL_Z1 + 0.3, Y, CH, M.wallDark);
   A.box(M.wallDark, 2.2, CH - 2.5, 0.3, -26.0, Y + 2.5, HALL_Z1 + 0.15);
@@ -137,12 +138,29 @@ export function buildApartment(scene, ctx) {
   wall(HALL_X1, HALL_X1 + 0.05, HALL_Z0, HALL_Z1, Y, CH, M.blackMetal);
   // neighbouring apartment doors on the hall's north side + exit door
   const neighbour = (x, n) => {
-    A.box(M.walnut, 1.1, 2.4, 0.06, x, Y, HALL_Z0 - 0.0 + 0.01);
-    A.box(M.brass, 0.2, 0.05, 0.02, x + 0.4, Y + 1.05, HALL_Z0 + 0.06);
-    A.box(M.brass, 0.14, 0.09, 0.01, x, Y + 1.7, HALL_Z0 + 0.045);
-    A.box(M.trim, 1.3, 0.08, 0.05, x, Y + 2.4, HALL_Z0 + 0.03);
+    const zf = HALL_Z0 + 0.25;                                   // the hall-side face of the wall
+    A.box(M.walnut, 1.1, 2.4, 0.06, x, Y, zf + 0.02, { r: 0.004 });
+    for (const sx of [-1, 1]) A.box(M.trim, 0.07, 2.47, 0.08, x + sx * 0.585, Y, zf + 0.03);
+    A.box(M.trim, 1.26, 0.07, 0.08, x, Y + 2.4, zf + 0.03);
+    A.box(M.brass, 0.2, 0.04, 0.03, x + 0.4, Y + 1.05, zf + 0.07, { r: 0.01 });      // lever
+    A.box(M.brass, 0.14, 0.09, 0.012, x, Y + 1.7, zf + 0.055);                        // number plate
+    A.cyl(M.brass, 0.008, 0.008, 0.02, x, Y + 1.55, zf + 0.055, { rx: Math.PI / 2, cy: true, seg: 8 });   // peephole
+    A.box(M.blackMetal, 0.5, 0.008, 0.36, x, Y, zf + 0.06, { r: 0.004 });             // doormat
   };
   neighbour(-29.6, 4802); neighbour(-25.0, 4803); neighbour(-22.0, 4804);
+  // hall: warm dark ceiling panel and brass wall sconces (real lights) between the doors
+  A.box(pm('plaster', { color: 0x6a625a, interior: true }), HALL_X1 - HALL_X0, 0.03, HALL_Z1 - HALL_Z0 - 0.25, (HALL_X0 + HALL_X1) / 2, Y + CH - 0.03, (HALL_Z0 + 0.25 + HALL_Z1) / 2);
+  { const SK = new Kit(); const glowM = M.led.clone(); groups.hall.mats.push({ mat: glowM, on: 3.2, off: 0.0 });
+    const sconce = (x, z, dz) => {               // dz: +1 faces south (on the north wall), -1 faces north (on the south wall)
+      SK.box(M.brass, 0.09, 0.34, 0.02, x, Y + 1.55, z, { r: 0.006 });
+      SK.box(M.brass, 0.05, 0.05, 0.05, x, Y + 1.7, z + dz * 0.035, { r: 0.008 });
+      SK.cyl(glowM, 0.024, 0.024, 0.3, x, Y + 1.56, z + dz * 0.065, { seg: 10 });
+      SK.box(M.brass, 0.07, 0.014, 0.08, x, Y + 1.53, z + dz * 0.06, { r: 0.004 }); SK.box(M.brass, 0.07, 0.014, 0.08, x, Y + 1.87, z + dz * 0.06, { r: 0.004 });
+      gEmit(groups.hall, { pos: new THREE.Vector3(x, Y + 1.72, z + dz * 0.3), color: 0xffd6a0, intensity: 26, distance: 5, levelRange: 14, zone: 'hall' });
+    };
+    for (const x of [-32.2, -27.3, -23.6]) sconce(x, HALL_Z0 + 0.25, 1);
+    for (const x of [-32.2, -22.2]) sconce(x, HALL_Z1 - 0.03, -1);
+    SK.mesh(par, { occ: false }); }
   // ================================================================== balcony
   const BX0 = -38.0, BX1 = -31.0, BZ0 = 15.55;
   A.box(M.concrete, BX1 - BX0, 0.27, UNIT.z0 - BZ0, (BX0 + BX1) / 2, Y - 0.3, (UNIT.z0 + BZ0) / 2);     // top sits 3 cm under the deck boards (no coplanar z-fighting)
@@ -244,11 +262,12 @@ export function buildApartment(scene, ctx) {
   const fl = F.floorLamp(par, Y, -36.3, 29.5, Math.PI);
   retarget(fl.group, groups.living, M);
   gEmit(groups.living, { pos: new THREE.Vector3(fl.lightPos.x, Y + 1.4, fl.lightPos.z), color: 0xffc078, intensity: 55, distance: 10 });
-  gEmit(groups.living, { pos: new THREE.Vector3(-39.2, Y + 3.1, 26.2), color: 0xffdcb0, intensity: 26, distance: 13 });
+  gEmit(groups.living, { pos: new THREE.Vector3(-39.2, Y + 2.3, 26.2), color: 0xffdcb0, intensity: 20, distance: 13 });
   // shelf lights + art
-  F.artwork(par, Y + 1.45, -41.83, 23.9, Math.PI / 2, 0.9, 1.2, 0, 'walnut');
-  F.artwork(par, Y + 1.15, -41.83, 30.7, Math.PI / 2, 1.3, 0.85, 2, 'brass');
-  F.artwork(par, Y + 1.4, -35.4, 32.36, Math.PI, 0.9, 0.7, 1, 'black');
+  F.artwork(par, -41.83, Y + 0.95, 23.9, Math.PI / 2, 0.9, 1.2, 0, 'walnut');
+  F.artwork(par, -41.83, Y + 1.1, 30.7, Math.PI / 2, 1.3, 0.85, 2, 'brass');
+  F.artwork(par, -35.4, Y + 1.25, 32.375, Math.PI, 0.9, 0.7, 1, 'black');
+  F.artwork(par, -37.4, Y + 1.15, 32.375, Math.PI, 1.05, 0.8, 0, 'brass');
   // plants
   F.monstera(par, Y, -33.55, 21.5, 1.15, 3);
   F.fiddleFig(par, Y, -41.35, 31.25, 1.0, 4);
@@ -309,7 +328,7 @@ export function buildApartment(scene, ctx) {
   const BED = buildBed(par, Y, -47.7, 25.0);
   retarget(BED.group, groups.bedroom, M);
   BED.lampPos.forEach((p) => gEmit(groups.bedroom, { pos: p, color: 0xffb870, intensity: 32, distance: 6 }));
-  gEmit(groups.bedroom, { pos: new THREE.Vector3(-45.5, Y + 3.2, 25.0), color: 0xffe0c0, intensity: 18, distance: 10 });
+  gEmit(groups.bedroom, { pos: new THREE.Vector3(-45.5, Y + 2.3, 25.0), color: 0xffe0c0, intensity: 15, distance: 10 });
   buildDresser(par, Y, -42.24, 25.9, -Math.PI / 2);
   buildWardrobe(par, Y, -47.6, 28.59, Math.PI, 2.6);
   const RC = buildReadingCorner(par, Y, -43.3, 21.95);
@@ -320,11 +339,11 @@ export function buildApartment(scene, ctx) {
   const B = buildBathroom(par, Y, { rand: R });
   retarget(B.group, groups.bath, M);
   gEmit(groups.bath, { pos: B.mirrorLightPos, color: 0xeaf2ff, intensity: 50, distance: 7 });
-  gEmit(groups.bath, { pos: new THREE.Vector3(-45.5, Y + 3.1, 30.7), color: 0xfff2e0, intensity: 18, distance: 7 });
+  gEmit(groups.bath, { pos: new THREE.Vector3(-45.5, Y + 2.3, 30.7), color: 0xfff2e0, intensity: 16, distance: 7 });
   // hall lights
   const hallBulb = M.led.clone(); groups.hall.mats.push({ mat: hallBulb, on: 4.5, off: 0.0 });
-  gEmit(groups.hall, { pos: new THREE.Vector3(-30, Y + 3.2, 34.5), color: 0xffe2b8, intensity: 70, distance: 10, levelRange: 14, zone: 'hall' });
-  gEmit(groups.hall, { pos: new THREE.Vector3(-23.5, Y + 3.2, 34.5), color: 0xffe2b8, intensity: 70, distance: 10, levelRange: 14, zone: 'hall' });
+  gEmit(groups.hall, { pos: new THREE.Vector3(-30, Y + 2.3, 34.5), color: 0xffe2b8, intensity: 32, distance: 10, levelRange: 14, zone: 'hall' });
+  gEmit(groups.hall, { pos: new THREE.Vector3(-23.5, Y + 2.3, 34.5), color: 0xffe2b8, intensity: 32, distance: 10, levelRange: 14, zone: 'hall' });
 
   // ================================================================== doors
   const doors = out.doors;
@@ -421,6 +440,6 @@ export function buildApartment(scene, ctx) {
 }
 
 function artwork_bedroom(par, Y, M) {
-  F.artwork(par, Y + 1.5, -48.86, 21.6, Math.PI / 2, 0.7, 0.9, 2, 'black');
-  F.artwork(par, Y + 1.35, -42.15, 24.8, -Math.PI / 2, 1.0, 0.7, 0, 'brass');
+  F.artwork(par, -48.94, Y + 1.05, 21.6, Math.PI / 2, 0.7, 0.9, 2, 'black');
+  F.artwork(par, -42.12, Y + 1.05, 24.8, -Math.PI / 2, 1.0, 0.7, 0, 'brass');
 }

@@ -135,7 +135,7 @@ export class Atmosphere {
       L.color.setRGB(0.6, 0.72, 1.0); L.intensity = moonI + W.flash * 2; this.keyDir.copy(u.uMoonDir.value);
     }
     // environment / exposure levels
-    this.envIntensity = lerp(0.1, 1.0, this.day) * (1 - 0.15 * oc) + W.flash * 1.2;
+    this.envIntensity = lerp(0.1, 0.82, this.day) * (1 - 0.15 * oc) + W.flash * 1.2;   // a little less sky fill in the shade keeps sunny streets from going flat
     this.scene.environmentIntensity = this.envIntensity;
     this.updateShadow(focus);
 

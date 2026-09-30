@@ -14,6 +14,7 @@ import { Interact } from '../systems/interact.js';
 import { makeScreen } from './screens.js';
 import * as F from './furniture.js';
 import { palette } from './palette.js';
+import { cushion, rrShape, rrPath, pullBar } from './shapes.js';
 import { WALK_Y } from './street.js';
 
 PROC.checker = /* glsl */`
@@ -105,7 +106,7 @@ function shell(K, o) {
 }
 
 function glassBox(par, x, y, z, w, h, front) {
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshPhysicalMaterial({ color: 0x9ab8c4, roughness: 0.04, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false, envMapIntensity: 2.2, clearcoat: 1 }));
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), pm('plain', { color: 0x0a1518, rough: 0.02, glass: true, opacity: 0.1, side: THREE.DoubleSide, env: 2.2 }));
   m.position.set(x, y, z); if (front === 'x') m.rotation.y = Math.PI / 2; par.add(m); return m;
 }
 
@@ -118,6 +119,84 @@ function menuBoard(title, items, w = 512, h = 192, style = 'burger') {
     items.forEach(([n, p], i) => { const y = 66 + i * 30; c.textAlign = 'left'; c.fillText(n, 16, y); c.textAlign = 'right'; c.fillText(p, cw - 16, y); c.strokeStyle = 'rgba(255,230,180,0.2)'; c.beginPath(); c.moveTo(16, y + 14); c.lineTo(cw - 16, y + 14); c.stroke(); });
     c.textAlign = 'left';
   }, { fps: 1 });
+}
+
+
+// ---------------------------------------------------------------- diner furniture (chrome + red vinyl)
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+function pushKit(K, kk, x, y, z, ry) { for (const [mat, arr] of kk.g) for (const geo of arr) K.push(mat, geo.clone(), mat4(x, y, z, 0, ry, 0)); }
+
+// round domed seat cushion with piping (lathe)
+function roundCushion(K, vinyl, r, h, x, y, z) {
+  K.lathe(vinyl, [[0, 0], [r * 0.96, 0], [r, h * 0.16], [r * 1.02, h * 0.5], [r * 0.98, h * 0.85], [r * 0.8, h * 1.0], [r * 0.4, h * 1.08], [0, h * 1.1]], x, y, z, { seg: 28 });
+  K.torus(vinyl, r * 1.0, 0.007, x, y + h * 0.86, z, { rx: Math.PI / 2, seg: 32, seg2: 5 });
+}
+
+function dinerStool(K, M, vinyl, x, z, h = 0.68) {
+  K.lathe(M.chrome, [[0, 0], [0.22, 0], [0.235, 0.012], [0.225, 0.028], [0.09, 0.05], [0.05, 0.09], [0.038, 0.14], [0.034, h - 0.16], [0.05, h - 0.12], [0.07, h - 0.09], [0.0, h - 0.09]], x, 0, z, { seg: 24 });
+  K.torus(M.chrome, 0.18, 0.011, x, 0.3, z, { rx: Math.PI / 2, seg: 30, seg2: 6 });
+  for (let i = 0; i < 3; i++) { const a = i * 2.094 + 0.4; K.strut(M.chrome, [x, 0.3, z], [x + Math.cos(a) * 0.18, 0.3, z + Math.sin(a) * 0.18], 0.006, 0.006, { seg: 5 }); }
+  K.cyl(M.chrome, 0.21, 0.21, 0.02, x, h - 0.1, z, { seg: 28 });
+  roundCushion(K, vinyl, 0.2, 0.09, x, h - 0.08, z);
+}
+
+function dinerChair(K, M, vinyl, x, z, ry) {
+  const kk = new Kit();
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) kk.strut(M.chrome, [sx * 0.19, 0.44, sz * 0.19], [sx * 0.225, 0, sz * 0.225], 0.012, 0.009, { seg: 8 });
+  for (const sx of [-1, 1]) { kk.strut(M.chrome, [sx * 0.2, 0.22, -0.2], [sx * 0.2, 0.22, 0.2], 0.007, 0.007, { seg: 6 }); kk.strut(M.chrome, [sx * 0.19, 0.44, -0.19], [sx * 0.19, 0.95, -0.235], 0.011, 0.011, { seg: 8 }); }
+  kk.box(M.chrome, 0.44, 0.028, 0.44, 0, 0.42, 0, { r: 0.012 });
+  cushion(kk, vinyl, 0.44, 0.07, 0.44, 0, 0.44, 0, { r: 0.03, crown: 0.02, pipe: vinyl, seg: 4 });
+  cushion(kk, vinyl, 0.4, 0.26, 0.06, 0, 0.66, -0.225, { rx: -0.1, r: 0.03, crown: 0.02, pipe: vinyl, seg: 4 });
+  pushKit(K, kk, x, 0, z, ry);
+}
+
+// booth: two benches along local z at x = +-1.0 around a formica table (axis 0), or rotated for the side walls
+function dinerBooth(K, M, vinyl, tableTop, cx, cz, ry) {
+  const kk = new Kit();
+  for (const s of [-1, 1]) {
+    kk.box(M.blackMetal, 0.6, 0.2, 1.42, s * 1.0, 0.0, 0, { r: 0.01 });
+    kk.box(M.chrome, 0.62, 0.03, 1.44, s * 1.0, 0.03, 0);
+    cushion(kk, vinyl, 0.68, 0.22, 1.46, s * 1.0, 0.22, 0, { r: 0.06, crown: 0.03, pipe: vinyl, seg: 5 });
+    for (let j = 0; j < 3; j++) cushion(kk, vinyl, 0.62, 0.14, 0.47, s * 1.3, 0.42, (j - 1) * 0.49, { rz: s * (Math.PI / 2 - 0.12), r: 0.05, crown: 0.028, pipe: vinyl, seg: 5, buttons: [2, 1] });
+    kk.box(M.chrome, 0.05, 0.05, 1.5, s * 1.36, 1.03, 0, { r: 0.02 });
+    for (const zz of [-0.74, 0.74]) kk.box(M.chrome, 0.05, 0.9, 0.04, s * 1.36, 0.16, zz, { r: 0.015 });
+  }
+  // formica table with chrome banding and a pedestal
+  kk.box(tableTop, 0.85, 0.045, 1.3, 0, 0.7, 0, { r: 0.012, seg: 3 });
+  kk.box(M.chrome, 0.87, 0.03, 0.02, 0, 0.7, 0.65); kk.box(M.chrome, 0.87, 0.03, 0.02, 0, 0.7, -0.65);
+  kk.box(M.chrome, 0.02, 0.03, 1.32, 0.435, 0.7, 0); kk.box(M.chrome, 0.02, 0.03, 1.32, -0.435, 0.7, 0);
+  kk.lathe(M.chrome, [[0, 0], [0.24, 0], [0.26, 0.014], [0.22, 0.03], [0.07, 0.07], [0.05, 0.12], [0.045, 0.6], [0.09, 0.66], [0.0, 0.7]], 0, 0, 0, { seg: 24 });
+  // sugar, napkins, salt & pepper, ketchup, a menu
+  kk.box(M.chrome, 0.08, 0.13, 0.08, 0, 0.745, -0.2, { r: 0.008 });
+  kk.lathe(M.chrome, [[0, 0], [0.025, 0], [0.025, 0.09], [0.012, 0.11], [0, 0.11]], -0.1, 0.745, 0.2, { seg: 10 });
+  kk.lathe(M.chrome, [[0, 0], [0.025, 0], [0.025, 0.09], [0.012, 0.11], [0, 0.11]], 0.0, 0.745, 0.2, { seg: 10 });
+  kk.lathe(pm('plain', { color: 0xd43a2a, rough: 0.3, interior: true }), [[0, 0], [0.032, 0], [0.034, 0.14], [0.014, 0.17], [0.014, 0.19], [0, 0.19]], 0.1, 0.745, 0.2, { seg: 12 });
+  kk.box(pm('paper', {}), 0.16, 0.004, 0.22, 0.2, 0.745, -0.25, { ry: 0.3 });
+  pushKit(K, kk, cx, 0, cz, ry);
+}
+
+function dinerJukebox(K, M, x, z) {
+  const kk = new Kit();
+  const body = pm('paint', { color: 0x8a1c1c, rough: 0.3, physical: true, clearcoat: 0.6, ccRough: 0.1, interior: true });
+  const W = 0.9, D = 0.55;
+  const shape = new THREE.Shape();
+  shape.moveTo(-W / 2, 0); shape.lineTo(W / 2, 0); shape.lineTo(W / 2, 1.15);
+  shape.absarc(0, 1.15, W / 2, 0, Math.PI, false);
+  shape.lineTo(-W / 2, 0);
+  kk.extrude(body, shape, D, 0, 0, -D / 2, { bevel: 0.02, seg: 18 });
+  const glow = pm('plain', { color: 0x000000, emissive: 0xffcc60, emissiveI: 3.2, interior: true });
+  const glow2 = pm('plain', { color: 0x000000, emissive: 0x40e0ff, emissiveI: 3.6, interior: true });
+  // curved dome window, chrome arch trim, coloured light tubes, grille, coin door, feet
+  const arc = new THREE.Shape(); arc.moveTo(-0.33, 0.95); arc.lineTo(0.33, 0.95); arc.absarc(0, 1.15, 0.33, 0, Math.PI, false); arc.lineTo(-0.33, 0.95);
+  kk.extrude(glow, arc, 0.02, 0, 0, D / 2 + 0.028);
+  const trim = new THREE.Shape(); trim.absarc(0, 1.15, 0.4, 0, Math.PI, false); trim.absarc(0, 1.15, 0.36, Math.PI, 0, true);
+  kk.extrude(M.chrome, trim, 0.035, 0, 0, D / 2 + 0.02);
+  for (const sx of [-1, 1]) { kk.box(glow2, 0.03, 1.0, 0.03, sx * 0.4, 0.15, D / 2 + 0.03, { r: 0.012 }); kk.box(M.chrome, 0.05, 1.05, 0.02, sx * 0.44, 0.13, D / 2 + 0.015); }
+  kk.box(glow, 0.56, 0.2, 0.02, 0, 0.62, D / 2 + 0.028, { r: 0.004 });
+  for (let i = 0; i < 5; i++) kk.box(M.chrome, 0.5, 0.008, 0.008, 0, 0.66 - i * 0.032, D / 2 + 0.042);
+  kk.box(pm('fabric', { color: 0x1a1517, interior: true }), 0.56, 0.3, 0.02, 0, 0.2, D / 2 + 0.024);
+  for (const sx of [-1, 1]) kk.cyl(M.chrome, 0.035, 0.045, 0.06, sx * 0.34, 0, 0.2, { seg: 12 });
+  pushKit(K, kk, x, 0, z, 0);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -158,7 +237,9 @@ export function buildBurger(scene, glow, ctx) {
   K.box(red, 22, 1.0, 1.0, 35, 0, cz, { r: 0.02 });
   K.box(counterTop, 22.3, 0.07, 1.2, 35, 1.0, cz, { r: 0.01 });
   K.box(chromeS, 22.2, 0.08, 0.08, 35, 0.2, cz + 0.5);
-  for (let i = 0; i < 10; i++) { const sx = 25 + i * 2.2; K.cyl(M.steel, 0.03, 0.04, 0.68, sx, 0, -27.3, { seg: 8 }); K.cyl(red, 0.2, 0.2, 0.08, sx, 0.68, -27.3, { seg: 20 }); K.cyl(chromeS, 0.22, 0.22, 0.03, sx, 0.66, -27.3, { seg: 20 }); K.torus(chromeS, 0.17, 0.01, sx, 0.3, -27.3, { seg: 16, seg2: 6 }); }
+  const vinylS = pm('leather', { color: 0xa8231b, physical: true, clearcoat: 0.35, ccRough: 0.25, interior: true });
+  for (let i = 0; i < 10; i++) dinerStool(K, M, vinylS, 25 + i * 2.2, -27.3);
+  K.box(chromeS, 22.0, 0.04, 0.05, 35, 0.22, cz + 0.52, { r: 0.015 });                                    // chrome kick rail
   addCollider(23.8, 46.2, -29.1, -27.6, 0, 1.2, 0);
   // kitchen equipment (back of the kitchen zone z -35.7..-30)
   const st = M.steel;
@@ -184,23 +265,21 @@ export function buildBurger(scene, glow, ctx) {
   for (let i = 0; i < 6; i++) {
     const bx = 22.4 + i * 4.9, bz = -15.6;
     if (bx > 27 && bx < 33.6) continue;
-    for (const s of [-1, 1]) { K.box(vinyl, 0.7, 0.45, 1.5, bx + s * 1.0, 0, bz, { r: 0.05, seg: 3 }); K.box(vinyl, 0.16, 0.9, 1.5, bx + s * 1.28, 0.3, bz, { r: 0.05, seg: 3 }); }
-    K.box(tableTop, 0.85, 0.05, 1.3, bx, 0.72, bz, { r: 0.01 }); K.cyl(M.steel, 0.05, 0.08, 0.72, bx, 0, bz, { seg: 8 });
-    K.box(M.chrome, 0.05, 0.13, 0.05, bx, 0.77, bz - 0.2); K.box(M.chrome, 0.08, 0.1, 0.07, bx, 0.77, bz + 0.2);
-    K.box(pm('paper', {}), 0.3, 0.02, 0.3, bx, 0.77, bz + 0.3, {});
+    dinerBooth(K, M, vinyl, tableTop, bx, bz, 0);
     addCollider(bx - 1.5, bx + 1.5, bz - 0.85, bz + 0.85, 0, 1.2, 0);
   }
   // free tables with chairs in the middle
   for (let i = 0; i < 5; i++) for (const zz of [-20.5, -24]) {
     const tx = 24 + i * 6;
-    K.cyl(tableTop, 0.45, 0.45, 0.05, tx, 0.72, zz, { seg: 24 }); K.cyl(M.steel, 0.04, 0.06, 0.72, tx, 0, zz, { seg: 8 }); K.cyl(M.steel, 0.25, 0.25, 0.03, tx, 0, zz, { seg: 16 });
-    for (const a of [0, Math.PI]) { const cx = tx + Math.cos(a) * 0.85; K.cyl(vinyl, 0.22, 0.22, 0.08, cx, 0.45, zz, { seg: 18 }); K.cyl(M.steel, 0.02, 0.02, 0.45, cx, 0, zz, { seg: 6 }); }
+    K.lathe(tableTop, [[0, 0.7], [0.43, 0.7], [0.455, 0.706], [0.46, 0.72], [0.455, 0.735], [0.43, 0.742], [0, 0.742]], tx, 0, zz, { seg: 40 });
+    K.torus(M.chrome, 0.455, 0.011, tx, 0.72, zz, { rx: Math.PI / 2, seg: 40, seg2: 6 });
+    K.lathe(M.chrome, [[0, 0], [0.26, 0], [0.28, 0.014], [0.24, 0.03], [0.07, 0.07], [0.045, 0.12], [0.04, 0.6], [0.09, 0.68], [0, 0.7]], tx, 0, zz, { seg: 24 });
+    K.box(M.chrome, 0.07, 0.12, 0.07, tx - 0.08, 0.745, zz, { r: 0.008 }); K.lathe(pm('plain', { color: 0xd43a2a, rough: 0.3, interior: true }), [[0, 0], [0.03, 0], [0.032, 0.12], [0.012, 0.16], [0, 0.16]], tx + 0.1, 0.745, zz - 0.05, { seg: 10 });
+    for (const a of [0, Math.PI]) dinerChair(K, M, vinyl, tx + Math.cos(a) * 0.85, zz, a === 0 ? -Math.PI / 2 : Math.PI / 2);
     addCollider(tx - 1.2, tx + 1.2, zz - 0.6, zz + 0.6, 0, 1.0, 0);
   }
   // jukebox
-  K.box(pm('paint', { color: 0x8a1c1c, rough: 0.35, interior: true }), 0.9, 1.5, 0.55, 49.6, 0, -14.4, { r: 0.05 });
-  K.box(pm('plain', { color: 0x000000, emissive: 0xffcc60, emissiveI: 3.5, interior: true }), 0.6, 0.6, 0.03, 49.6, 0.7, -14.1);
-  K.torus(pm('plain', { color: 0x000000, emissive: 0x40e0ff, emissiveI: 4, interior: true }), 0.4, 0.03, 49.6, 1.45, -14.3, { rx: 0, seg: 20, seg2: 6 });
+  dinerJukebox(K, M, 49.6, -14.4);
   addCollider(49.1, 50.1, -14.8, -13.8, 0, 1.6, 0);
   // pendant lights over the booths + ceiling fans
   const pend = new Kit();
@@ -223,10 +302,7 @@ export function buildBurger(scene, glow, ctx) {
   boards.forEach((b, i) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.35), b.mat); m.position.set(28 + i * 7, 2.85, z0 + 0.4); par.add(m); b.visible = true; K.box(M.blackMetal, 3.7, 1.45, 0.05, 28 + i * 7, 2.13, z0 + 0.36); });
   // ---- side-wall booths (axis along z) ----
   const sideBooth = (xc, zc) => {
-    for (const sg of [-1, 1]) { K.box(vinyl, 1.5, 0.45, 0.7, xc, 0, zc + sg * 1.0, { r: 0.05 }); K.box(vinyl, 1.5, 0.9, 0.16, xc, 0.3, zc + sg * 1.28, { r: 0.05 }); }
-    K.box(tableTop, 1.3, 0.05, 0.85, xc, 0.72, zc, { r: 0.01 }); K.cyl(M.steel, 0.05, 0.08, 0.72, xc, 0, zc, { seg: 8 });
-    K.box(M.chrome, 0.05, 0.13, 0.05, xc - 0.2, 0.77, zc - 0.15); K.box(M.chrome, 0.07, 0.1, 0.08, xc + 0.2, 0.77, zc + 0.15);
-    K.box(pm('paper', {}), 0.28, 0.02, 0.28, xc, 0.77, zc + 0.02, {});
+    dinerBooth(K, M, vinyl, tableTop, xc, zc, Math.PI / 2);
     addCollider(xc - 0.85, xc + 0.85, zc - 1.42, zc + 1.42, 0, 1.2, 0);
   };
   for (const zc of [-26.6, -22.3, -18.0]) sideBooth(19.25, zc);
@@ -292,7 +368,9 @@ export function buildBurger(scene, glow, ctx) {
   burger.mesh(par, {});
   // lights
   const em = (x, y, z, c, i, d) => LightPool.add({ pos: new THREE.Vector3(x, y, z), color: c, intensity: i, distance: d, levelY: 0, levelRange: 12, zone: 'burger' });
-  em(26, 3.2, -20, 0xffd6a0, 120, 14); em(44, 3.2, -20, 0xffd6a0, 120, 14); em(35, 3.4, -32, 0xffe6c4, 110, 12); em(35, 3.0, -15, 0xffd6a0, 90, 10); em(35, 3.2, -33.4, 0xff5a8a, 42, 8); em(49, 1.4, -14.4, 0xffcc60, 40, 6);
+  em(26, 3.2, -20, 0xffd6a0, 60, 14); em(44, 3.2, -20, 0xffd6a0, 60, 14); em(35, 3.4, -32, 0xffe6c4, 90, 12); em(35, 3.0, -15, 0xffd6a0, 50, 10); em(35, 3.2, -33.4, 0xff5a8a, 42, 8); em(49, 1.4, -14.4, 0xffcc60, 40, 6);
+  for (let i = 0; i < 6; i++) for (const zz of [-16.2, -21, -25]) em(23 + i * 5.4, H - 1.35, zz, 0xffd0a0, 46, 8);       // one real light per pendant shade
+  for (const [x, z] of [[24, -34], [35, -34.4], [46, -34], [19.6, -26], [19.6, -18], [50.4, -26], [50.4, -18], [26, -13], [44, -13]]) em(x, 3.6, z, 0xffc890, 34, 9);   // the warm LED cove washing the walls
   // NPCs
   const npcs = [];
   if (G.people) {
@@ -458,7 +536,7 @@ export function buildGrocery(scene, glow, ctx) {
   const lot = new THREE.Mesh(new THREE.PlaneGeometry(46, 60), lotMat); lot.rotation.x = -Math.PI / 2; lot.position.set(41, GY + 0.008, 72); lot.receiveShadow = true; lot.layers.enable(1); par.add(lot);
   // ---- lights ----
   const em = (x, y, z, c, i, d) => LightPool.add({ pos: new THREE.Vector3(x, y, z), color: c, intensity: i, distance: d, levelY: 0, levelRange: 12, zone: 'grocery' });
-  for (const [x, z] of [[28, 22], [45, 22], [58, 22], [28, 33], [45, 33], [58, 33], [38, 16]]) em(x, H - 0.6, z, 0xf2f6ff, 110, 14);
+  for (const [x, z] of [[24, 17], [36, 17], [48, 17], [60, 17], [24, 24], [36, 24], [48, 24], [60, 24], [24, 33], [36, 33], [48, 33], [60, 33], [38, 16]]) em(x, H - 0.6, z, 0xf2f6ff, 95, 13);
   em(41, 3.0, z0 - 1.6, 0xfff0d0, 100, 10);
   // NPCs: cashiers, a shopper
   if (G.people) {

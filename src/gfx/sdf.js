@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { G } from '../core/G.js';
 
 const H = THREE.DataUtils.toHalfFloat;
-export const SDF = { ready: false, min: new THREE.Vector3(), max: new THREE.Vector3(), voxel: 0.15, count: 0 };
+export const SDF = { ready: false, volumes: {}, active: null, count: 0, ms: 0 };
 
 // 1x1x1 stand-ins so every material can compile before the bake exists
 export function initSdfUniforms() {
@@ -21,10 +21,12 @@ export function initSdfUniforms() {
   G.u.tSdf.value = one; G.u.tVis.value = vis;
 }
 
-// occ: [{cx,cy,cz,hx,hy,hz,ry,t,r}] world space; opts: { min, max (Vector3), voxel, emitters }
+// Bake one interior volume. occ: [{cx,cy,cz,hx,hy,hz,ry,t,r}] world space.
+// opts: { name, min, max (Vector3), voxel, emitters, floorY (adds a floor slab), ceilH + ceilZ0 (adds a ceiling slab from ceilZ0 to the +z edge) }
+// Only one volume is active at a time (activateSdf) - the game switches when the player changes zone.
 export function bakeSdf(occAll, opts) {
   const t0 = performance.now();
-  const vox = opts.voxel ?? 0.15, MARGIN = 1.4, FAR = 1.5, SHRINK = 0.02;
+  const vox = opts.voxel ?? 0.15, MARGIN = 1.05, FAR = 1.25, SHRINK = 0.02;
   const mn = opts.min, mx = opts.max;
   const nx = Math.ceil((mx.x - mn.x) / vox), ny = Math.ceil((mx.y - mn.y) / vox), nz = Math.ceil((mx.z - mn.z) / vox);
   const sdf = new Float32Array(nx * ny * nz).fill(FAR);
@@ -50,11 +52,13 @@ export function bakeSdf(occAll, opts) {
     }
     if (!holdsLight) occ.push(o);
   }
-  // explicit shell: floor and ceiling slabs (the balcony has open sky above it)
-  const Y0 = opts.floorY, CH = opts.ceilH;
-  occ.push({ cx: (mn.x + mx.x) / 2, cy: Y0 - 0.55, cz: (mn.z + mx.z) / 2, hx: (mx.x - mn.x) / 2 + 1, hy: 0.5, hz: (mx.z - mn.z) / 2 + 1, ry: 0, t: 0, r: 0 });
-  const zc0 = opts.ceilZ0, zc1 = mx.z + 1;
-  occ.push({ cx: (mn.x + mx.x) / 2, cy: Y0 + CH + 0.5, cz: (zc0 + zc1) / 2, hx: (mx.x - mn.x) / 2 + 1, hy: 0.5, hz: (zc1 - zc0) / 2, ry: 0, t: 0, r: 0 });
+  // explicit shell: floor and (optionally) ceiling slabs (the balcony has open sky above it)
+  const Y0 = opts.floorY;
+  if (Y0 != null) occ.push({ cx: (mn.x + mx.x) / 2, cy: Y0 - 0.55, cz: (mn.z + mx.z) / 2, hx: (mx.x - mn.x) / 2 + 1, hy: 0.5, hz: (mx.z - mn.z) / 2 + 1, ry: 0, t: 0, r: 0 });
+  if (opts.ceilH != null) {
+    const zc0 = opts.ceilZ0, zc1 = mx.z + 1;
+    occ.push({ cx: (mn.x + mx.x) / 2, cy: Y0 + opts.ceilH + 0.5, cz: (zc0 + zc1) / 2, hx: (mx.x - mn.x) / 2 + 1, hy: 0.5, hz: (zc1 - zc0) / 2, ry: 0, t: 0, r: 0 });
+  }
 
   // ---- splat every occluder's distance into the voxels around it ----
   for (const o of occ) {
@@ -87,6 +91,7 @@ export function bakeSdf(occAll, opts) {
       }
     }
   }
+  const tSplat = performance.now();
   const sdfH = new Uint16Array(sdf.length);
   for (let i = 0; i < sdf.length; i++) sdfH[i] = H(Math.max(-FAR, Math.min(FAR, sdf[i])));
   const tex = new THREE.Data3DTexture(sdfH, nx, ny, nz);
@@ -94,14 +99,14 @@ export function bakeSdf(occAll, opts) {
   tex.wrapS = tex.wrapT = tex.wrapR = THREE.ClampToEdgeWrapping; tex.unpackAlignment = 1; tex.needsUpdate = true;
 
   // ---- sky visibility (L1 SH) on a coarse grid, by sphere-tracing the field ----
-  const vs = 0.4;
+  const vs = Math.max(0.4, Math.cbrt(((mx.x - mn.x) * (mx.y - mn.y) * (mx.z - mn.z)) / 80000));
   const vx = Math.ceil((mx.x - mn.x) / vs), vy = Math.ceil((mx.y - mn.y) / vs), vz = Math.ceil((mx.z - mn.z) / vs);
   const nearest = (x, y, z) => {
     const i = Math.floor((x - mn.x) / vox), j = Math.floor((y - mn.y) / vox), k = Math.floor((z - mn.z) / vox);
     if (i < 0 || j < 0 || k < 0 || i >= nx || j >= ny || k >= nz) return null;
     return sdf[idx(i, j, k)];
   };
-  const NDIR = 40, dirs = [];
+  const NDIR = 26, dirs = [];
   for (let n = 0; n < NDIR; n++) { const yy = 1 - (2 * (n + 0.5)) / NDIR, rr = Math.sqrt(1 - yy * yy), ph = n * 2.399963; dirs.push([Math.cos(ph) * rr, yy, Math.sin(ph) * rr]); }
   const vis = new Float32Array(vx * vy * vz * 4), solid = new Uint8Array(vx * vy * vz);
   const K = (4 * Math.PI) / NDIR, Y0s = 0.282095, Y1s = 0.488603;
@@ -113,12 +118,12 @@ export function bakeSdf(occAll, opts) {
     let c0 = 0, c1x = 0, c1y = 0, c1z = 0;
     for (const [dx, dy, dz] of dirs) {
       let t = 0.15, V = 0;
-      for (let it = 0; it < 70; it++) {
+      for (let it = 0; it < 44; it++) {
         const x = px + dx * t, y = py + dy * t, z = pz + dz * t;
         const d = nearest(x, y, z);
         if (d === null) { V = dy > -0.1 ? 1 : 0.22; break; }             // left the volume: sky (or ground seen through a window)
         if (d < 0.03) break;
-        t += Math.max(d, 0.12);
+        t += Math.max(d, 0.2);
       }
       if (V) { c0 += V * Y0s; c1x += V * Y1s * dx; c1y += V * Y1s * dy; c1z += V * Y1s * dz; }
     }
@@ -146,17 +151,26 @@ export function bakeSdf(occAll, opts) {
   vtex.format = THREE.RGBAFormat; vtex.type = THREE.HalfFloatType; vtex.minFilter = vtex.magFilter = THREE.LinearFilter;
   vtex.wrapS = vtex.wrapT = vtex.wrapR = THREE.ClampToEdgeWrapping; vtex.unpackAlignment = 1; vtex.needsUpdate = true;
 
-  G.u.tSdf.value = tex; G.u.tVis.value = vtex;
-  G.u.uSdfMin.value.copy(mn);
-  G.u.uSdfInv.value.set(1 / (mx.x - mn.x), 1 / (mx.y - mn.y), 1 / (mx.z - mn.z));
-  SDF.ready = true; SDF.min.copy(mn); SDF.max.copy(mx); SDF.voxel = vox; SDF.count = occ.length;
-  SDF.ms = Math.round(performance.now() - t0);
-  return SDF;
+  const vol = { name: opts.name || 'v' + Object.keys(SDF.volumes).length, tex, vtex, min: mn.clone(), max: mx.clone(), inv: new THREE.Vector3(1 / (mx.x - mn.x), 1 / (mx.y - mn.y), 1 / (mx.z - mn.z)), voxel: vox, count: occ.length, ms: Math.round(performance.now() - t0), splatMs: Math.round(tSplat - t0), cfg: Object.assign({ bounce: 0.035, floor: 0.005, sun: 0.16, sky: 1 }, opts.cfg || {}) };
+  SDF.volumes[vol.name] = vol; SDF.ready = true; SDF.count += occ.length; SDF.ms += vol.ms;
+  return vol;
+}
+
+// Make one baked volume the one every interior shader samples (null = none: the plain three.js lighting path).
+export function activateSdf(name) {
+  const v = name ? SDF.volumes[name] : null;
+  if (SDF.active === (v ? v.name : null)) return;
+  SDF.active = v ? v.name : null;
+  if (!v) { G.u.uSdfCfg.value.x = 0; return; }
+  G.u.tSdf.value = v.tex; G.u.tVis.value = v.vtex;
+  G.u.uSdfMin.value.copy(v.min); G.u.uSdfInv.value.copy(v.inv);
+  G.u.uSdfCfg.value.x = 1; G.u.uSdfCfg.value.z = v.cfg.bounce; G.u.uSdfCfg.value.w = v.cfg.floor;
+  G.u.uSdfCfg2.value.set(v.cfg.sun, v.cfg.sky, 0, 0);
 }
 // GLSL shared by every interior material (see materials.js). SDF_AO_TAPS / SDF_STEPS / SDF_SOFT are macros.
 export const SDF_GLSL = /* glsl */`
 uniform sampler3D tSdf; uniform sampler3D tVis;
-uniform vec3 uSdfMin, uSdfInv; uniform vec4 uSdfCfg; uniform float uSdfDbg;
+uniform vec3 uSdfMin, uSdfInv; uniform vec4 uSdfCfg, uSdfCfg2; uniform float uSdfDbg;
 float sdfFade(vec3 p){
   vec3 uvw = (p - uSdfMin) * uSdfInv;
   vec3 e = min(uvw, 1.0 - uvw);
@@ -206,9 +220,9 @@ vec3 interiorIrr(vec3 p, vec3 n){
   float A = clamp(0.282095 * v.x + 0.325735 * dot(v.yzw, n), 0.0, 1.0);
   vec3 sky = mix(uHorizon, uZenith, 0.3) + uCityGlow;
   float day = clamp(uSunDir.y * 2.0 + 0.2, 0.0, 1.0) * (1.0 - uNight);
-  vec3 sunBounce = uSunCol * (0.16 * day) * mix(0.35, 1.0, clamp(v.x * 0.9, 0.0, 1.0));
+  vec3 sunBounce = uSunCol * (uSdfCfg2.x * day) * mix(0.35, 1.0, clamp(v.x * 0.9, 0.0, 1.0));
   vec3 moon = vec3(0.10, 0.15, 0.26) * (0.05 * uNight);                 // cool city/moon light through the glass at night
   vec3 amb = vec3(uSdfCfg.w) + sunBounce + (uHorizon + uCityGlow) * 0.05;
-  return 3.14159265 * (sky * A + moon * (0.25 + A) + amb);
+  return 3.14159265 * (sky * (A * uSdfCfg2.y) + moon * (0.25 + A) + amb);
 }
 `;

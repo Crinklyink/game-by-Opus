@@ -93,11 +93,19 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
     }
     float chip = smoothstep(0.55, 0.9, nz(vec3(w*5.0, 0.4)).g) * mark;
     col = mix(col, mcol * (0.75 + 0.25*n2) * (1.0 - 0.3*chip), mark * 0.92 * (1.0 - 0.45*wet));
-    // cracks
+    // cracks (fine) + tar-sealed cracks (long, wandering, glossy black) + rectangular utility-trench repairs
     float crack = smoothstep(0.012, 0.0, abs(nz(vec3(w*0.9 + 0.3, 0.1)).r - 0.5) - 0.0) * smoothstep(0.55, 0.75, big) * (1.0 - smoothstep(0.02, 0.12, fp));
+    float tarL = smoothstep(0.02 + fp*0.5, 0.004, abs(nz(vec3(w*0.13 + 5.1, 0.6)).r - 0.5)) * smoothstep(0.35, 0.65, nz(vec3(w*0.02, 2.2)).g);
+    vec2 tcell = floor(w / vec2(23.0, 13.0)); vec2 tf = w - (tcell + 0.5) * vec2(23.0, 13.0);
+    float th = hash21(tcell + 41.0);
+    vec2 tsz = vec2(2.2 + 3.5 * hash21(tcell + 7.0), 0.5 + 0.35 * hash21(tcell + 9.0));
+    vec2 td = abs(tf - (hash22(tcell + 3.0) - 0.5) * vec2(12.0, 6.0)) - tsz;
+    float trench = step(0.78, th) * (1.0 - smoothstep(0.0, max(0.03, fp), max(td.x, td.y)));
+    float tedge = step(0.78, th) * smoothstep(0.06 + fp, 0.0, abs(max(td.x, td.y)));
+    col *= mix(1.0, 0.62, trench) * (1.0 - 0.45*tedge) * (1.0 - 0.7*tarL);
     col *= 1.0 - 0.6*crack;
-    rough = 0.9 - 0.12*repair;
-    hgt = (sp - 0.5) * 0.0025 * (1.0 - smoothstep(0.006, 0.05, fp)) - crack*0.004*(1.0 - smoothstep(0.005, 0.03, fp));
+    rough = 0.9 - 0.12*repair - 0.25*tarL - 0.15*trench;
+    hgt = (sp - 0.5) * 0.0025 * (1.0 - smoothstep(0.006, 0.05, fp)) - crack*0.004*(1.0 - smoothstep(0.005, 0.03, fp)) - tedge*0.0025 + trench*0.0012;
     // gutter strip next to the kerb is dirtier & wetter
     float gut = smoothstep(1.3, 0.0, 7.0 - min(sd.x, sd.y) ) * smoothstep(0.0, 0.2, 7.0 - min(sd.x, sd.y)) * (inter ? 0.0 : 1.0);
     col *= 1.0 - 0.25*gut;
@@ -115,7 +123,12 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
     float jd = (1.0 - jm) * min(1.0, 0.03 / jw);
     float tone = hash21(gid);
     vec3 base = plaza ? vec3(0.145, 0.133, 0.122) : vec3(0.155, 0.153, 0.147);
-    col = base * (0.85 + 0.3*tone) * (0.8 + 0.4*n1) * (0.92 + 0.16*n2);
+    col = base * (0.74 + 0.5*tone) * (0.78 + 0.44*n1) * (0.9 + 0.2*n2);
+    float slabFix = step(0.9, hash21(gid + 17.0));                                   // occasional replaced slab: newer, paler
+    col = mix(col, vec3(0.24, 0.235, 0.225) * (0.9 + 0.2*n2), slabFix);
+    vec2 sl = (gf - 0.5) * gsz;
+    float slabCrack = smoothstep(0.012 + fp*0.5, 0.0, abs(nz(vec3(sl*2.6 + gid*3.1, 1.3)).r - 0.5)) * step(0.55, hash21(gid + 5.0));
+    col *= 1.0 - 0.55*slabCrack;
     float gfade = 1.0 - smoothstep(0.03, 0.22, fp);
     float grain = mix(0.5, nz(vec3(w*22.0, 0.3)).g, gfade);
     col *= 0.94 + 0.12*grain;
@@ -131,7 +144,10 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
     float tact = step(7.05, dmin) * step(dmin, 8.0);
     rough = 0.86 - 0.2*granite;
     aoJ = 1.0 - 0.7 * jd;                              // joints read as darkness + occlusion (a height step here shimmers into dots)
-    hgt = (grain - 0.5) * 0.0006 * (1.0 - smoothstep(0.006, 0.05, fp));
+    float slabH = (hash21(gid + 23.0) - 0.5) * 0.0016 * (1.0 - smoothstep(0.05, 0.4, fp));    // slabs settle at slightly different heights
+    hgt = (grain - 0.5) * 0.0009 * (1.0 - smoothstep(0.006, 0.05, fp)) + slabH - slabCrack * 0.0018 * (1.0 - smoothstep(0.004, 0.03, fp));
+    float litter = smoothstep(0.7, 0.85, nz(vec3(w*1.3, 4.4)).g) * smoothstep(1.6, 0.0, side);                 // leaves and grit gather along the kerb
+    col = mix(col, vec3(0.10, 0.08, 0.05) * (0.6 + 0.8*nz(vec3(w*17.0, 1.0)).r), litter * 0.55);
     puddle = smoothstep(0.5, 0.66, nz(vec3(w*0.2, 0.4)).r*0.6 + n1*0.4) * 0.8;
     refl = 0.55;
   }

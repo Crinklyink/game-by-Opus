@@ -95,7 +95,7 @@ export function buildBlocks(scene, glow, planarOnly = false) {
   const signAtlas = makeSignAtlas(), intAtlas = makeInteriorAtlas();
   signMat = new THREE.MeshBasicMaterial({ map: signAtlas, toneMapped: false, color: new THREE.Color(1, 1, 1) });
   interiorMat = new THREE.MeshBasicMaterial({ map: intAtlas, toneMapped: false, color: new THREE.Color(1, 1, 1) });
-  glassMat = new THREE.MeshPhysicalMaterial({ color: 0x7f9aa6, roughness: 0.03, metalness: 0.0, transparent: true, opacity: 0.16, envMapIntensity: 2.4, clearcoat: 1, clearcoatRoughness: 0.02, depthWrite: false, side: THREE.DoubleSide });
+  glassMat = pm('plain', { color: 0x0a1518, rough: 0.02, glass: true, opacity: 0.12, side: THREE.DoubleSide, env: 2.4 });
   const K = new Kit();     // architecture/frames/awnings (merged by material)
   const metal = pm('metal', { color: 0x1c1e21, p: [0, 60, 0, 0], rough: 0.5 });
   const stone = pm('concrete', { color: 0x6b6c6e, p: [0, 0, 0, 0], wet: 1 });

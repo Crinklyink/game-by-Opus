@@ -53,11 +53,26 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   vec2 fw = fwidth(vec2(cx, cy)) * 1.5;
   float inx = smoothstep(lo.x, lo.x + fw.x, f.x) * smoothstep(hi.x, hi.x - fw.x, f.x);
   float iny = smoothstep(lo.y, lo.y + fw.y, f.y) * smoothstep(hi.y, hi.y - fw.y, f.y);
-  float win = inx * iny;
+  float open = inx * iny;                                 // the opening in the wall plane
+  // windows sit back in a reveal: follow the view ray to the recessed glass plane (parallax that moves with the camera)
+  vec3 rdv = normalize(wp - cameraPosition);
+  float rzv = clamp(-dot(rdv, n), 0.22, 1.0);
+  float recess = (style < 0.5 ? 0.06 : 0.22) * (1.0 - smoothstep(90.0, 300.0, dist));
+  vec2 c2 = vec2(cx, cy) + vec2(dot(rdv, T), rdv.y) * (recess / rzv) / vec2(bay, fh);
+  vec2 f2 = fract(c2);
+  float sameCell = (floor(c2.x) == cell.x && floor(c2.y) == cell.y) ? 1.0 : 0.0;
+  float inx2 = smoothstep(lo.x, lo.x + fw.x, f2.x) * smoothstep(hi.x, hi.x - fw.x, f2.x);
+  float iny2 = smoothstep(lo.y, lo.y + fw.y, f2.y) * smoothstep(hi.y, hi.y - fw.y, f2.y);
+  float glassVis = inx2 * iny2 * sameCell;
+  float win = open * glassVis;
+  float reveal = open * (1.0 - glassVis);                 // the side/top faces of the reveal
   // mullion in the middle of wide bays
-  float mull = smoothstep(0.012 + fw.x, 0.012, abs(f.x - 0.5)) * (style < 0.5 ? 1.0 : 0.0);
+  float mull = smoothstep(0.012 + fw.x, 0.012, abs(f2.x - 0.5)) * (style < 0.5 ? 1.0 : 0.0);
   win *= 1.0 - mull;
-  float frameEdge = 1.0 - smoothstep(0.0, 0.05, min(min(f.x - lo.x, hi.x - f.x), min(f.y - lo.y, hi.y - f.y)) * 4.0);
+  float fwM = style < 0.5 ? 0.045 : 0.07;                 // frame width (m)
+  float edgeM = min(min(f2.x - lo.x, hi.x - f2.x) * bay, min(f2.y - lo.y, hi.y - f2.y) * fh);
+  float frame = win * (1.0 - smoothstep(fwM, fwM + 0.025, edgeM));
+  float frameEdge = 0.0;
 
   // ----- wall (spandrel / solid) -----
   vec3 wall;
@@ -85,8 +100,8 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   float occupied = step(0.08, rnd2);                                   // some rooms vacant/dark
 
   if (win > 0.01 && dist < 900.0) {
-    float a = (f.x - lo.x) / (hi.x - lo.x) * (bay * (hi.x - lo.x));   // metres across the window
-    float b = (f.y - lo.y) / (hi.y - lo.y) * (fh * (hi.y - lo.y));
+    float a = (f2.x - lo.x) / (hi.x - lo.x) * (bay * (hi.x - lo.x));   // metres across the window
+    float b = (f2.y - lo.y) / (hi.y - lo.y) * (fh * (hi.y - lo.y));
     float ww = bay * (hi.x - lo.x), wh = fh * (hi.y - lo.y);
     vec3 col = vec3(0.0);
     vec3 lamp = roomPalette(hash21(cell + seed*5.0 + 3.0 + faceId));
@@ -126,8 +141,8 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
       // curtains / blinds
       float blind = step(0.62, rnd2 * 0.7 + rnd3 * 0.5);
       float cover = mix(0.25, 1.0, hash21(cell + 9.0 + seed));
-      float bl = blind * step(1.0 - cover, f.y > lo.y ? (f.y - lo.y)/(hi.y - lo.y) : 0.0);
-      float slat = 0.75 + 0.25 * sin((f.y - lo.y) / (hi.y - lo.y) * 60.0);
+      float bl = blind * step(1.0 - cover, f2.y > lo.y ? (f2.y - lo.y)/(hi.y - lo.y) : 0.0);
+      float slat = 0.75 + 0.25 * sin((f2.y - lo.y) / (hi.y - lo.y) * 60.0);
       vec3 blindCol = mix(vec3(0.82,0.8,0.75), lamp, 0.4) * slat;
       col = mix(col, blindCol * (daylight*1.4 + lit*occupied*roomI*0.35), bl);
     } else {
@@ -136,21 +151,25 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
       col = lamp * roomI * lit * occupied * v * 0.55 + vec3(0.03 + 0.05*(1.0-uNight));
     }
     emis = col * win;
-    // glass properties
-    s.alb = mix(wall, glassCol, win);
-    s.metal = mix(0.0, 0.58, win);
-    s.rough = mix(0.72, 0.05, win);
-    s.h = -(1.0 - win) * 0.0 + (1.0 - win) * 0.012 * dfade(wp, 0.03);
-    s.emis = emis * mix(1.0, 0.0, 0.0);
-    s.ao = mix(1.0, 0.75, frameEdge*(1.0-win));
-    // dark frame line around the glass
-    s.alb = mix(s.alb, vec3(0.02), frameEdge * win * 0.6);
-  } else if (win > 0.01) {
-    s.alb = mix(wall, glassCol, win); s.metal = 0.5*win; s.rough = mix(0.7, 0.08, win);
-  } else {
-    s.alb = wall; s.rough = 0.75 + 0.15*wg; s.metal = 0.0;
-    s.h = 0.006 * dfade(wp, 0.03) * (nz(wp*7.0).r - 0.5);
   }
+  // ----- architecture: reveal shadow, frames, sills, floor slabs, piers -----
+  float fdA = dfade(wp, 0.04);
+  float sillB = (style > 0.5 && style < 3.5) ? step(lo.y - 0.075, f.y) * step(f.y, lo.y + 0.004) * step(lo.x - 0.035, f.x) * step(f.x, hi.x + 0.035) : 0.0;
+  float slab = (style > 0.5 && style < 2.5) ? 1.0 - smoothstep(0.09, 0.135, f.y) : 0.0;
+  float pier = (style > 0.5 && style < 1.5) ? (1.0 - smoothstep(lo.x * 0.55, lo.x * 0.7, f.x)) + smoothstep(1.0 - lo.x * 0.7, 1.0 - lo.x * 0.55, f.x) : 0.0;
+  vec3 wallS = wall * mix(1.0, 1.0 + 0.18 * slab + 0.14 * sillB, 1.0);
+  wallS = mix(wallS, wallS * (0.32 + 0.25 * nz(wp * 5.0).r), reveal);           // the reveal is in its own shadow
+  float underSill = (style > 0.5 && style < 3.5) ? smoothstep(lo.y - 0.16, lo.y - 0.07, f.y) * (1.0 - step(lo.y - 0.075, f.y)) * inx : 0.0;
+  wallS *= 1.0 - 0.3 * underSill;
+  vec3 glassS = glassCol;
+  s.alb = mix(wallS, glassS, win);
+  s.alb = mix(s.alb, vec3(0.045, 0.05, 0.055), frame);
+  s.metal = mix(0.0, 0.58, win); s.metal = mix(s.metal, 0.85, frame);
+  s.rough = mix(0.74 + 0.12 * wg, 0.05, win); s.rough = mix(s.rough, 0.36, frame);
+  s.emis = emis * (1.0 - frame);
+  s.ao = 1.0 - 0.45 * reveal - 0.25 * underSill;
+  float relief = 0.006 * (nz(wp * 7.0).r - 0.5) + 0.028 * sillB + 0.022 * slab + 0.03 * pier - 0.1 * reveal;
+  s.h = relief * fdA * (1.0 - win);
 }
 `;
 

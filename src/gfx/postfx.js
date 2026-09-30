@@ -202,6 +202,10 @@ void main(){
   float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
   col = mix(vec3(l), col, uSat);
   col = mix(col, col*col*(3.0 - 2.0*col), uContrast);
+  // split toning: cool teal-ish shadows, warm highlights (keeps lit rooms from going uniformly orange and daylight from going flat)
+  float tl = dot(col, vec3(0.2126, 0.7152, 0.0722));
+  col *= mix(vec3(0.94, 1.0, 1.07), vec3(1.0), smoothstep(0.0, 0.32, tl));
+  col *= mix(vec3(1.0), vec3(1.045, 1.0, 0.93), smoothstep(0.45, 0.95, tl));
   col *= 1.0 - uVig * smoothstep(0.32, 0.98, length(cc * vec2(1.25, 1.0)) * 1.55);
   col *= 1.0 - uFade;
   col = toSRGB(col);
