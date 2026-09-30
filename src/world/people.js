@@ -3,83 +3,149 @@
 // pedestrian signals.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { G } from '../core/G.js';
 import { rng, clamp } from '../core/util.js';
 import { patchMaterial } from '../gfx/materials.js';
 import { PROC } from '../gfx/glsl.js';
 import { Signals, isRoad, ROAD_Y, WALK_Y } from './street.js';
 
-const PARTS = { LEG_L: 0, LEG_R: 1, TORSO: 2, ARM_L: 3, ARM_R: 4, HEAD: 5, HAIR: 6, SHOE: 7, BAG: 8 };
+// Colour categories (aPart) - what a part is made of. Motion is separate (aSw) so shoes/forearms can follow their limbs.
+const PART = { LEG: 0, TORSO: 2, UPPER: 3, FORE: 4, HEAD: 5, HAIR: 6, SHOE: 7, BAG: 8, FACE: 9, BELT: 10, LONGHAIR: 11, JACKET: 12, HAT: 13, HAND: 14 };
+// Motion groups (aSw): 1/2 thigh L/R (hip), 3/4 upper arm L/R (shoulder), 5/6 calf+shoe L/R (knee under hip), 7/8 forearm+hand L/R (elbow under shoulder)
 
-function part(geo, id, pivot) {
+function part(geo, id, pivot, sw = 0, pivot2 = pivot) {
   geo = geo.index ? geo.toNonIndexed() : geo;
   for (const k of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(k)) geo.deleteAttribute(k);
   const n = geo.attributes.position.count;
   geo.setAttribute('aPart', new THREE.Float32BufferAttribute(new Float32Array(n).fill(id), 1));
-  const pv = new Float32Array(n * 3); for (let i = 0; i < n; i++) { pv[i * 3] = pivot[0]; pv[i * 3 + 1] = pivot[1]; pv[i * 3 + 2] = pivot[2]; }
+  geo.setAttribute('aSw', new THREE.Float32BufferAttribute(new Float32Array(n).fill(sw), 1));
+  const pv = new Float32Array(n * 3), pv2 = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { pv.set(pivot, i * 3); pv2.set(pivot2, i * 3); }
   geo.setAttribute('aPivot', new THREE.Float32BufferAttribute(pv, 3));
+  geo.setAttribute('aPivot2', new THREE.Float32BufferAttribute(pv2, 3));
   return geo;
 }
-const tr = (g, x, y, z, sx = 1, sy = 1, sz = 1, rx = 0) => { g.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, 0, 0)), new THREE.Vector3(sx, sy, sz))); return g; };
+// translate / rotate(YXZ) / scale a geometry (normals follow via applyMatrix4)
+const T = (g, p = [0, 0, 0], s = [1, 1, 1], r = [0, 0, 0]) => { g.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(...p), new THREE.Quaternion().setFromEuler(new THREE.Euler(r[0], r[1], r[2], 'YXZ')), new THREE.Vector3(...s))); return g; };
+const lathe = (pts, seg = 16) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg);
+const ball = (rad, seg = 12) => new THREE.SphereGeometry(rad, seg, Math.max(6, seg - 4));
 
 function personGeometry() {
   const G_ = [];
+  const add = (g, id, pivot, sw, pivot2) => G_.push(part(g, id, pivot, sw, pivot2));
   for (const sg of [-1, 1]) {
-    const id = sg < 0 ? PARTS.LEG_L : PARTS.LEG_R, hip = [sg * 0.095, 0.93, 0];
-    G_.push(part(tr(new THREE.CylinderGeometry(0.088, 0.058, 0.86, 10, 1), sg * 0.095, 0.5, 0), id, hip));
-    G_.push(part(tr(new THREE.SphereGeometry(0.09, 8, 6), sg * 0.095, 0.93, 0), id, hip));
-    G_.push(part(tr(new THREE.BoxGeometry(0.095, 0.07, 0.27), sg * 0.095, 0.045, 0.06), PARTS.SHOE, hip));
-    // arms
-    const sh = [sg * 0.245, 1.43, 0], aid = sg < 0 ? PARTS.ARM_L : PARTS.ARM_R;
-    G_.push(part(tr(new THREE.CylinderGeometry(0.048, 0.04, 0.6, 8, 1), sg * 0.255, 1.14, 0), aid, sh));
-    G_.push(part(tr(new THREE.SphereGeometry(0.048, 8, 6), sg * 0.255, 0.83, 0), aid, sh));
-    G_.push(part(tr(new THREE.SphereGeometry(0.056, 8, 6), sg * 0.245, 1.43, 0), aid, sh));
+    const hip = [sg * 0.095, 0.93, 0], knee = [sg * 0.095, 0.5, 0], sh = [sg * 0.25, 1.43, 0], elb = [sg * 0.25, 1.13, 0];
+    const L = sg < 0;
+    // ---- legs: thigh (hip) + kneecap; calf + shoe (knee under hip) ----
+    add(T(lathe([[0, 0.5], [0.058, 0.5], [0.068, 0.6], [0.081, 0.72], [0.09, 0.86], [0.094, 0.94], [0, 0.945]], 16), [sg * 0.095, 0, 0]), PART.LEG, hip, L ? 1 : 2, hip);
+    add(T(ball(0.06, 10), [sg * 0.095, 0.5, 0.006]), PART.LEG, hip, L ? 1 : 2, hip);
+    add(T(lathe([[0, 0.075], [0.044, 0.075], [0.053, 0.09], [0.05, 0.13], [0.052, 0.25], [0.056, 0.4], [0.06, 0.49], [0, 0.505]], 14), [sg * 0.095, 0, 0]), PART.LEG, knee, L ? 5 : 6, hip);
+    add(T(ball(1, 12), [sg * 0.095, 0.058, 0.058], [0.05, 0.044, 0.125]), PART.SHOE, knee, L ? 5 : 6, hip);          // shoe upper
+    add(T(ball(1, 10), [sg * 0.095, 0.058, -0.035], [0.046, 0.04, 0.05]), PART.SHOE, knee, L ? 5 : 6, hip);        // heel
+    add(T(new THREE.BoxGeometry(0.088, 0.014, 0.265), [sg * 0.095, 0.008, 0.052]), PART.SHOE, knee, L ? 5 : 6, hip); // sole
+    // ---- arms: upper arm + elbow ball (shoulder); forearm + hand (elbow under shoulder) ----
+    add(T(lathe([[0, 1.13], [0.038, 1.13], [0.043, 1.2], [0.049, 1.3], [0.054, 1.4], [0.05, 1.45], [0.034, 1.477], [0, 1.483]], 12), [sg * 0.25, 0, 0]), PART.UPPER, sh, L ? 3 : 4, sh);
+    add(T(ball(0.04, 8), [sg * 0.25, 1.13, 0]), PART.UPPER, sh, L ? 3 : 4, sh);
+    add(T(lathe([[0, 0.83], [0.026, 0.83], [0.03, 0.87], [0.036, 0.96], [0.041, 1.06], [0.04, 1.13], [0, 1.135]], 12), [sg * 0.25, 0, 0]), PART.FORE, elb, L ? 7 : 8, sh);
+    add(T(ball(1, 10), [sg * 0.25, 0.795, 0.006], [0.029, 0.056, 0.04]), PART.HAND, elb, L ? 7 : 8, sh);
+    add(T(ball(1, 8), [sg * 0.25 - sg * 0.02, 0.83, 0.03], [0.011, 0.028, 0.012], [0.3, 0, -sg * 0.3]), PART.HAND, elb, L ? 7 : 8, sh);   // thumb
+    // ---- ear ----
+    add(T(ball(1, 8), [sg * 0.088, 1.635, -0.004], [0.012, 0.028, 0.02]), PART.HEAD, [0, 1.45, 0], 0, [0, 1.45, 0]);
+    // ---- eyes / brows (dark details) ----
+    add(T(ball(1, 8), [sg * 0.033, 1.652, 0.087], [0.0105, 0.0095, 0.006]), PART.FACE, [0, 1.45, 0], 0, [0, 1.45, 0]);
+    add(T(new THREE.BoxGeometry(0.034, 0.006, 0.008), [sg * 0.034, 1.674, 0.088], [1, 1, 1], [0, 0, sg * -0.12]), PART.FACE, [0, 1.45, 0], 0, [0, 1.45, 0]);
   }
-  // torso (tapered), neck, head, hair, bag
-  G_.push(part(tr(new THREE.CylinderGeometry(0.2, 0.165, 0.56, 12, 1), 0, 1.2, 0, 1.0, 1, 0.62), PARTS.TORSO, [0, 1.0, 0]));
-  G_.push(part(tr(new THREE.CylinderGeometry(0.055, 0.06, 0.09, 8), 0, 1.5, 0), PARTS.HEAD, [0, 1.45, 0]));
-  G_.push(part(tr(new THREE.SphereGeometry(0.105, 14, 12), 0, 1.63, 0.005, 0.92, 1.1, 1.0), PARTS.HEAD, [0, 1.45, 0]));
-  G_.push(part(tr(new THREE.SphereGeometry(0.111, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.62), 0, 1.655, -0.006, 0.94, 1.08, 1.04), PARTS.HAIR, [0, 1.45, 0]));
-  G_.push(part(tr(new THREE.BoxGeometry(0.27, 0.34, 0.13), 0, 1.22, -0.16), PARTS.BAG, [0, 1.0, 0]));
+  const P0 = [0, 1.0, 0], HP = [0, 1.45, 0];
+  // ---- torso (elliptical loft), collar, belt + buckle ----
+  add(T(lathe([[0, 0.88], [0.135, 0.885], [0.16, 0.95], [0.158, 1.03], [0.145, 1.12], [0.142, 1.16], [0.158, 1.26], [0.182, 1.35], [0.2, 1.41], [0.195, 1.455], [0.13, 1.485], [0.07, 1.5], [0, 1.505]], 20), [0, 0, 0], [1, 1, 0.62]), PART.TORSO, P0);
+  add(T(new THREE.TorusGeometry(0.066, 0.014, 6, 16), [0, 1.494, 0.004], [1, 1, 1], [Math.PI / 2 - 0.25, 0, 0]), PART.TORSO, P0);
+  add(T(new THREE.CylinderGeometry(0.163, 0.163, 0.036, 20, 1, true), [0, 1.03, 0], [1, 1, 0.62]), PART.BELT, P0);
+  add(T(new THREE.BoxGeometry(0.036, 0.03, 0.012), [0, 1.03, 0.1]), PART.BELT, P0);
+  // ---- jacket shell (visible on some people): open coat to mid-thigh ----
+  add(T(lathe([[0, 0.76], [0.172, 0.76], [0.176, 0.88], [0.172, 1.03], [0.163, 1.16], [0.176, 1.27], [0.198, 1.355], [0.214, 1.41], [0.207, 1.46], [0.135, 1.488], [0.08, 1.508], [0, 1.51]], 20), [0, 0, 0], [1, 1, 0.66]), PART.JACKET, P0);
+  add(T(new THREE.BoxGeometry(0.03, 0.34, 0.012), [0.062, 1.33, 0.113], [1, 1, 1], [0, 0, -0.22]), PART.JACKET, P0);   // lapels
+  add(T(new THREE.BoxGeometry(0.03, 0.34, 0.012), [-0.062, 1.33, 0.113], [1, 1, 1], [0, 0, 0.22]), PART.JACKET, P0);
+  // ---- neck, head (egg + jaw + nose + mouth), hair, long hair, hat ----
+  add(T(new THREE.CylinderGeometry(0.046, 0.054, 0.1, 12), [0, 1.525, 0]), PART.HEAD, HP);
+  add(T(ball(1, 16), [0, 1.642, 0.004], [0.089, 0.113, 0.099]), PART.HEAD, HP);
+  add(T(ball(1, 12), [0, 1.588, 0.014], [0.072, 0.068, 0.084]), PART.HEAD, HP);
+  add(T(new THREE.ConeGeometry(0.014, 0.038, 8), [0, 1.622, 0.106], [1, 1, 1], [Math.PI / 2 - 0.35, 0, 0]), PART.HEAD, HP);
+  add(T(new THREE.BoxGeometry(0.038, 0.005, 0.006), [0, 1.594, 0.097]), PART.FACE, HP);
+  add(T(new THREE.SphereGeometry(0.118, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.6), [0, 1.652, -0.008], [0.94, 1.02, 1.05]), PART.HAIR, HP);
+  add(T(ball(1, 10), [0, 1.615, -0.06], [0.09, 0.09, 0.06]), PART.HAIR, HP);
+  add(T(lathe([[0, 1.36], [0.05, 1.37], [0.085, 1.45], [0.102, 1.55], [0.108, 1.63], [0.06, 1.72], [0, 1.735]], 14), [0, 0, -0.058], [1, 1, 0.8]), PART.LONGHAIR, HP);
+  add(T(new THREE.SphereGeometry(0.121, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), [0, 1.665, -0.004], [0.96, 1.0, 1.06]), PART.HAT, HP);
+  add(T(new THREE.TorusGeometry(0.118, 0.016, 6, 20), [0, 1.668, -0.004], [1, 1, 1], [Math.PI / 2, 0, 0]), PART.HAT, HP);
+  // ---- backpack with straps (shown on some people) ----
+  add(T(new RoundedBoxGeometry(0.27, 0.34, 0.13, 3, 0.045), [0, 1.22, -0.16]), PART.BAG, P0);
+  add(T(new RoundedBoxGeometry(0.2, 0.14, 0.05, 2, 0.02), [0, 1.14, -0.24]), PART.BAG, P0);
+  for (const sg of [-1, 1]) {
+    add(T(new THREE.BoxGeometry(0.036, 0.012, 0.22), [sg * 0.09, 1.478, -0.03]), PART.BAG, P0);
+    add(T(new THREE.BoxGeometry(0.036, 0.3, 0.012), [sg * 0.09, 1.33, 0.098], [1, 1, 1], [0.05, 0, 0]), PART.BAG, P0);
+  }
   return mergeGeometries(G_, false);
 }
 
 const PERSON_PROC = /* glsl */`
 varying vec3 vPC;
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
-  float f = nz(wp*9.0).r;
-  s.alb *= vPC * (0.9 + 0.2*f);
+  float f = nz(wp*9.0).r, g = nz(wp*31.0).g;
+  s.alb *= vPC * (0.9 + 0.2*f) * (0.95 + 0.1*g);
   s.rough = 0.8;
   s.h = 0.0;
 }`;
 const VERT = {
-  head: `attribute float aPart; attribute vec3 aPivot; attribute vec3 aAnim; attribute vec3 aCShirt; attribute vec3 aCPants; attribute vec3 aCSkin; attribute vec3 aCHair; varying vec3 vPC; float pAng;`,
+  head: `attribute float aPart; attribute float aSw; attribute vec3 aPivot; attribute vec3 aPivot2; attribute vec3 aAnim; attribute vec3 aCShirt; attribute vec3 aCPants; attribute vec3 aCSkin; attribute vec3 aCHair; varying vec3 vPC; uniform float uWet; float gA1, gA2;
+vec3 rotX(vec3 d, float a){ float c = cos(a), s = sin(a); return vec3(d.x, d.y * c - d.z * s, d.y * s + d.z * c); }
+void poseAngles(){
+  float sp = max(aAnim.y, 0.0), sw = sin(aAnim.x) * 0.72 * sp;
+  bool seated = aAnim.y < -0.5;
+  gA1 = 0.0; gA2 = 0.0;
+  if (aSw < 0.5) return;
+  if (aSw < 2.5) { gA1 = aSw < 1.5 ? sw : -sw; if (seated) gA1 = -1.45; }
+  else if (aSw < 4.5) { gA1 = aSw < 3.5 ? -sw * 0.85 : sw * 0.85; if (seated) gA1 = -0.5; }
+  else if (aSw < 6.5) { float h = aSw < 5.5 ? sw : -sw; gA1 = seated ? -1.45 : h; gA2 = seated ? 1.5 : max(h, 0.0) * 0.85; }
+  else { float a = aSw < 7.5 ? -sw * 0.85 : sw * 0.85; gA1 = seated ? -0.5 : a; gA2 = seated ? -1.15 : -(0.12 + 0.3 * sp); }
+}`,
   normal: /* glsl */`
 {
-  float sp = max(aAnim.y, 0.0), sw = sin(aAnim.x) * 0.72 * sp;
-  pAng = 0.0;
-  if (aPart < 0.5) pAng = sw; else if (aPart < 1.5) pAng = -sw; else if (aPart > 2.5 && aPart < 3.5) pAng = -sw * 0.85; else if (aPart > 3.5 && aPart < 4.5) pAng = sw * 0.85;
-  if (aAnim.y < -0.5) { if (aPart < 1.5 || (aPart > 6.5 && aPart < 7.5)) pAng = -1.4; else if (aPart > 2.5 && aPart < 4.5) pAng = -0.55; }
-  float c = cos(pAng), s = sin(pAng);
-  objectNormal = vec3(objectNormal.x, objectNormal.y * c - objectNormal.z * s, objectNormal.y * s + objectNormal.z * c);
+  poseAngles();
+  if (aSw > 4.5) objectNormal = rotX(objectNormal, gA2);
+  if (aSw > 0.5) objectNormal = rotX(objectNormal, gA1);
 }`,
   begin: /* glsl */`
 {
-  float sp = max(aAnim.y, 0.0);
-  float c = cos(pAng), s = sin(pAng);
-  vec3 d = transformed - aPivot;
-  transformed = aPivot + vec3(d.x, d.y * c - d.z * s, d.y * s + d.z * c);
-  float bob = abs(sin(aAnim.x)) * 0.028 * sp + sin(aAnim.x * 0.31 + aAnim.z * 20.0) * 0.004;
+  float sp = max(aAnim.y, 0.0), seed = aAnim.z;
+  vec3 pp = transformed;
+  if (aSw > 4.5) pp = aPivot + rotX(pp - aPivot, gA2);
+  if (aSw > 0.5) { vec3 hp = aSw > 4.5 ? aPivot2 : aPivot; pp = hp + rotX(pp - hp, gA1); }
+  transformed = pp;
+  float bob = abs(sin(aAnim.x)) * 0.028 * sp + sin(aAnim.x * 0.31 + seed * 20.0) * 0.004;
   transformed.y += bob;
   if (aPart > 1.5 && aPart < 2.5) transformed.x += sin(aAnim.x) * 0.012 * sp;
+  // per-person outfit variety derived from the seed
+  float hairStyle = floor(fract(seed * 7.13) * 3.0);                       // 0 short, 1 long, 2 hat
+  bool bag = fract(seed * 13.7) < 0.42;
+  bool jk = fract(seed * 3.31) < 0.3 + 0.5 * uWet;
+  vec3 jcol = aCPants * 1.3 + vec3(0.035);
   vec3 pc = aCShirt;
-  if (aPart < 1.5) pc = aCPants;
-  else if (aPart < 2.5) pc = aCShirt;
-  else if (aPart < 4.5) { bool low = position.y < aPivot.y - 0.33; pc = low ? aCSkin : aCShirt; }
+  bool hide = false;
+  if (aPart < 0.5) pc = aCPants;
+  else if (aPart < 2.5) pc = jk ? jcol * 0.5 + aCShirt * 0.5 : aCShirt;
+  else if (aPart < 3.5) pc = jk ? jcol : aCShirt;
+  else if (aPart < 4.5) pc = jk ? jcol : aCSkin;
   else if (aPart < 5.5) pc = aCSkin;
-  else if (aPart < 6.5) pc = aCHair;
-  else if (aPart < 7.5) pc = vec3(0.05);
-  else pc = mix(aCShirt, aCHair, 0.6) * 0.8;
+  else if (aPart < 6.5) { pc = aCHair; hide = hairStyle > 1.5; }
+  else if (aPart < 7.5) pc = vec3(0.045);
+  else if (aPart < 8.5) { pc = mix(aCShirt, aCHair, 0.6) * 0.8; hide = !bag; }
+  else if (aPart < 9.5) pc = vec3(0.035, 0.028, 0.025);
+  else if (aPart < 10.5) pc = vec3(0.06, 0.04, 0.03);
+  else if (aPart < 11.5) { pc = aCHair; hide = !(hairStyle > 0.5 && hairStyle < 1.5); }
+  else if (aPart < 12.5) { pc = jcol; hide = !jk; }
+  else if (aPart < 13.5) { pc = aCShirt * 0.55 + vec3(0.02); hide = hairStyle < 1.5; }
+  else pc = aCSkin;
+  if (hide) transformed = aPivot;
   vPC = pc;
 }`,
 };
