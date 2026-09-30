@@ -217,7 +217,7 @@ export function buildStreet(scene, glow, planar, ctx) {
   out.groundMat = M.ground;
 
   // ---- ground plane (roads) ----
-  const gg = new THREE.PlaneGeometry(760, 760, 1, 1); gg.rotateX(-Math.PI / 2);
+  const gg = new THREE.PlaneGeometry(760, 760, 24, 24); gg.rotateX(-Math.PI / 2);        // subdivided: one giant triangle interpolates depth badly and can beat nearer geometry
   const gm = new THREE.Mesh(gg, M.ground); gm.position.y = ROAD_Y; gm.receiveShadow = true;
   scene.add(gm);
   out.ground = gm;

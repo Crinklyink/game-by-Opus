@@ -2,6 +2,7 @@
 import { G } from '../core/G.js';
 import { fmtClock, fmtMoney, clamp } from '../core/util.js';
 import { GOALS } from '../systems/data.js';
+import { prettyGPU } from '../gfx/gpu.js';
 
 const $ = (h) => { const d = document.createElement('div'); d.innerHTML = h.trim(); return d.firstElementChild; };
 
@@ -62,7 +63,7 @@ export class UI {
         <button class="btn" data-a="set">Settings</button>
         <button class="btn" data-a="keys">Controls</button>
       </div>
-      <div class="foot">${G.gpu ? `${G.gpu.renderer.replace(/ANGLE \(|\)/g, '').slice(0, 70)} · ${G.q.name} preset` : ''}</div>`;
+      <div class="foot">${G.gpu ? `${prettyGPU(G.gpu.renderer)} · ${G.q.name} preset` : ''}</div>`;
     t.onclick = (e) => {
       const a = e.target.dataset?.a; if (!a) return;
       if (a === 'new') onStart(); else if (a === 'cont') onContinue(); else if (a === 'set') onSettings(); else if (a === 'keys') this.showControls(true);

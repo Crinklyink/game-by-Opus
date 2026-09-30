@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { G } from '../core/G.js';
 import { rng, clamp } from '../core/util.js';
 import { Kit, addCollider, mat4 } from './kit.js';
-import { pm } from '../gfx/materials.js';
+import { pm, patchMaterial, VERT } from '../gfx/materials.js';
 import { canvasTex } from '../gfx/noise.js';
 import { PROC } from '../gfx/glsl.js';
 import { LightPool } from '../gfx/lights.js';
@@ -33,6 +33,107 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   s.h = ((a - 0.5) * 0.02 + (b - 0.5) * 0.01);
 }`;
 
+PROC.leaves = /* glsl */`
+uniform sampler2D tLeaf;
+void surf(vec3 p, vec3 n, vec3 wp, inout S s){
+  vec4 lt = texture(tLeaf, vUvP);
+  float v = nz(wp*0.5).r, w = nz(wp*3.1).g;
+  s.alb *= lt.rgb * (1.5 + 0.5*v) * (0.9 + 0.2*w);
+  s.a = lt.a;
+  s.rough = 0.6; s.h = 0.0;
+  s.emis += s.alb * uSunCol * 0.05 * (1.0 - uNight);          // light bleeding through the leaves
+}`;
+// gentle wind for the whole crown (blobs + leaf cards move together); cards also flutter
+const windHook = (flutter) => ({
+  head: 'uniform float uTime; uniform float uWet;',
+  begin: `
+#ifdef USE_INSTANCING
+  float wph = dot(instanceMatrix[3].xz, vec2(0.37, 0.53));
+#else
+  float wph = 0.0;
+#endif
+  float wh = clamp(position.y / 8.0, 0.0, 1.0); wh *= wh;
+  float gust = 1.0 + 2.2 * uWet;
+  transformed.x += (sin(uTime * 1.1 + wph) * 0.5 + sin(uTime * 2.3 + wph * 1.7) * 0.25) * 0.16 * wh * gust;
+  transformed.z += cos(uTime * 0.9 + wph * 1.3) * 0.11 * wh * gust;
+${flutter ? '  transformed += vec3(sin(uTime * 6.1 + position.x * 9.0 + position.z * 4.0), sin(uTime * 5.3 + position.y * 8.0), sin(uTime * 5.7 + position.z * 9.0 + position.x * 3.0)) * 0.02 * wh * gust;' : ''}
+`,
+});
+VERT.canopy = windHook(false);
+VERT.leaves = windHook(true);
+
+// 2x2 atlas of leafy twigs, painted procedurally (alpha = leaf shapes, rgb = veins / tonal variation)
+function makeLeafAtlas() {
+  return canvasTex(512, 512, (c, w, h) => {
+    c.clearRect(0, 0, w, h);
+    const RR = rng(90210);
+    const leaf = (x, y, ang, len, wid, tone) => {
+      c.save(); c.translate(x, y); c.rotate(ang);
+      const g = c.createLinearGradient(0, -wid, 0, wid);
+      g.addColorStop(0, `hsl(${88 + tone * 22}, 34%, ${58 + tone * 16}%)`); g.addColorStop(1, `hsl(${96 + tone * 16}, 40%, ${40 + tone * 14}%)`);
+      c.fillStyle = g;
+      c.beginPath(); c.moveTo(0, 0);
+      c.bezierCurveTo(len * 0.25, -wid * 1.05, len * 0.72, -wid * 0.8, len, 0);
+      c.bezierCurveTo(len * 0.72, wid * 0.8, len * 0.25, wid * 1.05, 0, 0);
+      c.fill();
+      c.strokeStyle = 'rgba(236,246,196,0.6)'; c.lineWidth = Math.max(1, wid * 0.1);
+      c.beginPath(); c.moveTo(len * 0.02, 0); c.lineTo(len * 0.92, 0); c.stroke();
+      c.lineWidth = Math.max(0.7, wid * 0.045); c.strokeStyle = 'rgba(220,236,170,0.34)';
+      for (let k = 1; k <= 4; k++) { const vx = len * (0.14 + k * 0.16), dy = wid * 0.62 * (1 - k * 0.13); c.beginPath(); c.moveTo(vx, 0); c.lineTo(vx + len * 0.13, -dy); c.moveTo(vx, 0); c.lineTo(vx + len * 0.13, dy); c.stroke(); }
+      c.restore();
+    };
+    for (let cy = 0; cy < 2; cy++) for (let cx = 0; cx < 2; cx++) {
+      const ox = cx * 256, oy = cy * 256, sx = ox + 128, sy = oy + 242;
+      c.strokeStyle = '#3f321f'; c.lineWidth = 3.2; c.lineCap = 'round';
+      const bx = sx + (RR() - 0.5) * 36;
+      c.beginPath(); c.moveTo(sx, sy); c.quadraticCurveTo(sx + (RR() - 0.5) * 30, oy + 140, bx, oy + 26); c.stroke();
+      const n = 14 + Math.floor(RR() * 5);
+      for (let i = 0; i < n; i++) {
+        const t = i / (n - 1), side = i % 2 ? 1 : -1;
+        const px = sx + (bx - sx) * t * t + (RR() - 0.5) * 6, py = sy - t * 205;
+        const len = (66 - t * 26) * (0.85 + RR() * 0.3), wid = len * (0.27 + RR() * 0.06);
+        leaf(px, py, -Math.PI / 2 + side * (0.75 + RR() * 0.45) - t * side * 0.25, len, wid, RR());
+      }
+      leaf(bx, oy + 30, -Math.PI / 2 + (RR() - 0.5) * 0.4, 62, 17, RR());       // terminal leaf
+    }
+  }, { srgb: true, aniso: 4 });
+}
+
+// leaf cards scattered over the crown blobs (same layout for every tree: the whole crown is one shared geometry)
+function makeLeafCards(defs, density = 1) {
+  const R2 = rng(4441);
+  const pos = [], nor = [], uv = [], col = [];
+  const nrm = new THREE.Vector3(), t1 = new THREE.Vector3(), t2 = new THREE.Vector3(), u = new THREE.Vector3(), v = new THREE.Vector3();
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  for (const b of defs) {
+    const cnt = Math.round(b.r * b.r * 100 * density);
+    for (let i = 0; i < cnt; i++) {
+      let dx = R2() * 2 - 1, dy = R2() * 2 - 1, dz = R2() * 2 - 1; const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
+      if (dy < -0.55 && R2() < 0.6) dy = -dy * 0.4;                         // fewer leaves hanging under the crown
+      const rk = R2(), rr = b.r * (0.7 + rk * 0.55);
+      const px = b.x + dx * rr, py = b.y + dy * rr * 0.86, pz = b.z + dz * rr;
+      nrm.set(dx + (R2() - 0.5) * 0.9, dy + (R2() - 0.5) * 0.9, dz + (R2() - 0.5) * 0.9).normalize();
+      t1.set(0, 1, 0).cross(nrm); if (t1.lengthSq() < 1e-4) t1.set(1, 0, 0); t1.normalize();
+      t2.copy(nrm).cross(t1).normalize();
+      const ang = R2() * 6.2832, ca = Math.cos(ang), sa = Math.sin(ang);
+      u.copy(t1).multiplyScalar(ca).addScaledVector(t2, sa); v.copy(t2).multiplyScalar(ca).addScaledVector(t1, -sa);
+      const sz = (0.52 + R2() * 0.44) * (0.8 + b.r * 0.12) * 0.5;
+      const cell = Math.floor(R2() * 4), cu = (cell % 2) * 0.5, cv = (1 - Math.floor(cell / 2)) * 0.5;
+      const shade = (0.5 + 0.5 * Math.min(1, Math.max(0, dy * 0.6 + 0.55))) * (0.85 + R2() * 0.3) * (0.5 + 0.5 * rk);   // deeper leaves are darker
+      const nx = dx * 0.7 + nrm.x * 0.3, ny = dy * 0.7 + nrm.y * 0.3, nz2 = dz * 0.7 + nrm.z * 0.3, nl = Math.hypot(nx, ny, nz2) || 1;
+      const P = corners.map(([a, c]) => [px + (u.x * a + v.x * c) * sz, py + (u.y * a + v.y * c) * sz, pz + (u.z * a + v.z * c) * sz]);
+      const UV = corners.map(([a, c]) => [cu + (a * 0.5 + 0.5) * 0.5, cv + (c * 0.5 + 0.5) * 0.5]);
+      for (const k of [0, 1, 2, 0, 2, 3]) { pos.push(...P[k]); uv.push(...UV[k]); nor.push(nx / nl, ny / nl, nz2 / nl); col.push(shade, shade, shade); }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return g;
+}
+
 export function buildProps(scene, glow, ctx) {
   const R = rng(777);
   const M = palette();
@@ -43,7 +144,8 @@ export function buildProps(scene, glow, ctx) {
   const trunkGeo = new THREE.CylinderGeometry(0.1, 0.19, 4.4, 8, 3); trunkGeo.translate(0, 2.2, 0);
   const canopyParts = [];
   const blob = (r, x, y, z, det = 2) => { const g = new THREE.IcosahedronGeometry(r, det); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const vx = p.getX(i), vy = p.getY(i), vz = p.getZ(i); const nzv = Math.sin(vx * 3.1 + vy * 2.3) * Math.cos(vz * 2.7 + vx * 1.9); const k = 1 + 0.12 * nzv; p.setXYZ(i, vx * k, vy * k * 0.86, vz * k); } g.translate(x, y, z); g.computeVertexNormals(); return g.toNonIndexed(); };
-  canopyParts.push(blob(2.1, 0, 5.9, 0), blob(1.6, 1.4, 5.3, 0.4), blob(1.6, -1.3, 5.4, -0.5), blob(1.5, 0.3, 5.2, 1.4), blob(1.5, -0.4, 5.6, -1.4), blob(1.35, 0.2, 7.2, 0.1), blob(1.1, 1.5, 6.6, -1.2), blob(1.1, -1.6, 6.5, 1.0));
+  const blobDefs = [[2.1, 0, 5.9, 0], [1.6, 1.4, 5.3, 0.4], [1.6, -1.3, 5.4, -0.5], [1.5, 0.3, 5.2, 1.4], [1.5, -0.4, 5.6, -1.4], [1.35, 0.2, 7.2, 0.1], [1.1, 1.5, 6.6, -1.2], [1.1, -1.6, 6.5, 1.0]];
+  for (const [r, x, y, z] of blobDefs) canopyParts.push(blob(r * 0.8, x, y, z));      // the solid core is smaller than the leaf shell around it
   const canopyGeo = (() => { for (const g of canopyParts) for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k); return ctx.mergeGeometries(canopyParts, false); })();
   const treePos = [];
   for (let x = -150; x <= 150; x += 17) { if (Math.abs(x) < 16 || (x > -66 && x < -12)) continue; treePos.push([x + (R() - 0.5) * 2, 10.9]); if (Math.abs(x + 8.5) > 16) treePos.push([x + 8.5, -10.9]); }
@@ -71,7 +173,15 @@ export function buildProps(scene, glow, ctx) {
     addCollider(t.x - 0.25, t.x + 0.25, t.z - 0.25, t.z + 0.25, -1, 4, 0);
   });
   for (const m of [trunks, canopies]) { m.castShadow = true; m.receiveShadow = true; m.matrixAutoUpdate = false; m.updateMatrix(); m.computeBoundingSphere(); m.layers.enable(1); scene.add(m); }
-  out.trees = { trunks, canopies };
+  // leaf cards: alpha-tested (+ alpha-to-coverage under MSAA), sharing the trees' instance matrices/colours
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.62, metalness: 0, side: THREE.DoubleSide, vertexColors: true, alphaTest: 0.42, alphaToCoverage: true });
+  const leafUni = { uScale: { value: 1 }, uP: { value: new THREE.Vector4() }, uCol2: { value: new THREE.Color(0) }, uWetAmt: { value: 0.3 }, extra: { tLeaf: { value: makeLeafAtlas() } } };
+  leafMat.customProgramCacheKey = () => 'leaves';
+  leafMat.onBeforeCompile = (shader) => patchMaterial(shader, PROC.leaves, leafUni, '', VERT.leaves);
+  const leaves = new THREE.InstancedMesh(makeLeafCards(blobDefs.map(([r, x, y, z]) => ({ r, x, y, z })), ctx.q?.foliage ?? 1), leafMat, nT);
+  leaves.instanceMatrix = canopies.instanceMatrix; leaves.instanceColor = canopies.instanceColor;
+  leaves.castShadow = false; leaves.receiveShadow = true; leaves.matrixAutoUpdate = false; leaves.updateMatrix(); leaves.computeBoundingSphere(); scene.add(leaves);
+  out.trees = { trunks, canopies, leaves };
 
   // ---------------------------------------------------------------- small furniture (merged)
   const K = new Kit();

@@ -8,6 +8,9 @@ import * as THREE from 'three';
 import { G } from '../core/G.js';
 import { COMMON, SKY, PROC } from './glsl.js';
 
+// optional per-kind vertex code for pm() materials: { head, normal, begin } (see patchMaterial)
+export const VERT = {};
+
 const cache = new Map();
 export const interiorMats = new Set();
 
@@ -32,7 +35,7 @@ const VERT_INJECT = /* glsl */`
 }`;
 
 const FRAG_LIB = /* glsl */`
-struct S { vec3 alb; float rough; float metal; float h; vec3 emis; float ao; };
+struct S { vec3 alb; float rough; float metal; float h; vec3 emis; float ao; float a; };
 vec3 bumpN(vec3 pos, vec3 N, vec2 dH, float fd){
   vec3 sx = dFdx(pos), sy = dFdy(pos);
   vec3 R1 = cross(sy, N), R2 = cross(N, sx);
@@ -73,13 +76,14 @@ ${procSrc}
 `)
     .replace('#include <color_fragment>', /* glsl */`
 #include <color_fragment>
-S ps; ps.alb = diffuseColor.rgb; ps.rough = roughness; ps.metal = metalness; ps.h = 0.0; ps.emis = vec3(0.0); ps.ao = 1.0;
+S ps; ps.alb = diffuseColor.rgb; ps.rough = roughness; ps.metal = metalness; ps.h = 0.0; ps.emis = vec3(0.0); ps.ao = 1.0; ps.a = 1.0;
 vec3 pn = normalize(vWNormal);
 surf(vLocal * uScale, pn, vWPos, ps);
 float wetK = uWet * uWetAmt * mix(0.35, 1.0, clamp(pn.y, 0.0, 1.0));
 ps.alb *= mix(1.0, 0.62, wetK);
 ps.rough = mix(ps.rough, 0.07, wetK * 0.85);
 diffuseColor.rgb = ps.alb;
+diffuseColor.a *= ps.a;
 `)
     .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = clamp(ps.rough, 0.04, 1.0);')
     .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = ps.metal;')
@@ -114,7 +118,7 @@ export function pm(kind = 'plain', o = {}) {
   };
   m.userData = { kind, o, uni };
   m.customProgramCacheKey = () => `pm:${kind}:${o.physical ? 1 : 0}`;
-  m.onBeforeCompile = (shader) => patchMaterial(shader, PROC[kind] || PROC.plain, uni);
+  m.onBeforeCompile = (shader) => patchMaterial(shader, PROC[kind] || PROC.plain, uni, '', VERT[kind] || null);
   if (o.interior) { interiorMats.add(m); if (G.interiorEnv) m.envMap = G.interiorEnv; }
   cache.set(key, m);
   return m;

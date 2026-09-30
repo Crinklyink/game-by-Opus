@@ -33,7 +33,7 @@ try {
     if (process.env.EVAL) { const r = await page.evaluate(process.env.EVAL); fs.writeFileSync('.scratch/eval.txt', typeof r === 'string' ? r : JSON.stringify(r, null, 1)); }
     await page.evaluate((n) => window.__game.step(n), +frames);
     const clip = process.env.CLIP ? (([x, y, w, h]) => ({ x, y, width: w, height: h }))(process.env.CLIP.split(',').map(Number)) : undefined;
-    await page.screenshot({ path: out, timeout: 120000, clip });
+    await page.screenshot({ path: out, timeout: 280000, clip });
     logs.push('info: ' + JSON.stringify(await page.evaluate(() => window.__game.info())));
   }
 } catch (e) { logs.push('HARNESS ERROR: ' + e.message); }

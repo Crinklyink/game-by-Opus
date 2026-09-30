@@ -31,23 +31,33 @@ export function detectGPU() {
   return info;
 }
 
+// Human-friendly GPU name for menus/overlays ("ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x...) Direct3D11 ...)" -> "NVIDIA GeForce RTX 4070").
+export function prettyGPU(r) {
+  let s = String(r || 'Unknown GPU');
+  if (/swiftshader|llvmpipe|softpipe|mesa offscreen|microsoft basic/i.test(s)) return 'Software renderer (no GPU acceleration)';
+  const m = s.match(/^ANGLE \((.*)\)$/);
+  if (m) { const parts = m[1].split(/,\s*/); s = parts.length >= 2 ? parts[1] : parts[0]; }
+  s = s.replace(/\(0x[0-9a-f]+\)/gi, '').replace(/Direct3D\d+.*$/i, '').replace(/vs_\d_\d.*$/i, '').replace(/OpenGL.*$/i, '').replace(/^ANGLE Metal Renderer:\s*/i, '').replace(/\s{2,}/g, ' ').trim();
+  return s.length > 48 ? s.slice(0, 47) + '…' : s;
+}
+
 // Every knob the renderer honours. `res` is the starting internal resolution scale.
 export const PRESETS = {
   low: {
     id: 'low', name: 'Low', res: 0.72, dprCap: 1, msaa: 0, ao: 0, aoTaps: 0, dof: 0, bloom: 1, bloomLevels: 4, shadow: 1024, shadowExtent: 45,
-    lights: 6, planar: 0, probe: 0, interiorMap: 0, glass: 0, godrays: 0, traffic: 0.55, peds: 0.5, rain: 900, aniso: 2, fxaa: 1, streetDetail: 0.6, cloudQuality: 0,
+    lights: 6, planar: 0, probe: 0, interiorMap: 0, glass: 0, godrays: 0, traffic: 0.55, peds: 0.5, rain: 900, aniso: 2, fxaa: 1, streetDetail: 0.6, cloudQuality: 0, foliage: 0.3,
   },
   medium: {
     id: 'medium', name: 'Medium', res: 0.9, dprCap: 1.25, msaa: 2, ao: 1, aoTaps: 8, dof: 0, bloom: 1, bloomLevels: 5, shadow: 2048, shadowExtent: 55,
-    lights: 8, planar: 0.4, probe: 1, interiorMap: 0, glass: 1, godrays: 0, traffic: 0.8, peds: 0.75, rain: 2200, aniso: 4, fxaa: 0, streetDetail: 0.8, cloudQuality: 1,
+    lights: 8, planar: 0.4, probe: 1, interiorMap: 0, glass: 1, godrays: 0, traffic: 0.8, peds: 0.75, rain: 2200, aniso: 4, fxaa: 0, streetDetail: 0.8, cloudQuality: 1, foliage: 0.6,
   },
   high: {
     id: 'high', name: 'High', res: 1, dprCap: 1.5, msaa: 4, ao: 1, aoTaps: 12, dof: 1, bloom: 1, bloomLevels: 6, shadow: 4096, shadowExtent: 60,
-    lights: 12, planar: 0.5, probe: 1, interiorMap: 1, glass: 1, godrays: 1, traffic: 1, peds: 1, rain: 4500, aniso: 8, fxaa: 0, streetDetail: 1, cloudQuality: 2,
+    lights: 12, planar: 0.5, probe: 1, interiorMap: 1, glass: 1, godrays: 1, traffic: 1, peds: 1, rain: 4500, aniso: 8, fxaa: 0, streetDetail: 1, cloudQuality: 2, foliage: 1,
   },
   ultra: {
     id: 'ultra', name: 'Ultra', res: 1, dprCap: 2, msaa: 4, ao: 1, aoTaps: 16, dof: 1, bloom: 1, bloomLevels: 6, shadow: 4096, shadowExtent: 70,
-    lights: 16, planar: 0.75, probe: 1, interiorMap: 1, glass: 1, godrays: 1, traffic: 1, peds: 1, rain: 7000, aniso: 16, fxaa: 0, streetDetail: 1, cloudQuality: 2,
+    lights: 16, planar: 0.75, probe: 1, interiorMap: 1, glass: 1, godrays: 1, traffic: 1, peds: 1, rain: 7000, aniso: 16, fxaa: 0, streetDetail: 1, cloudQuality: 2, foliage: 1.3,
   },
 };
 

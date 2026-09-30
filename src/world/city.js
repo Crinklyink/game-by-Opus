@@ -286,7 +286,7 @@ export function buildGround(scene) {
     },
     vertexShader: GROUND_VERT, fragmentShader: GROUND_FRAG, side: THREE.DoubleSide, fog: false,
   });
-  const g = new THREE.PlaneGeometry(9000, 9000, 1, 1);
+  const g = new THREE.PlaneGeometry(9000, 9000, 60, 60);        // subdivided: a single 9 km triangle interpolates depth badly and can win the depth test against nearer geometry
   g.rotateX(-Math.PI / 2);
   const m = new THREE.Mesh(g, mat);
   m.position.y = -0.35;

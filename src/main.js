@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { G } from './core/G.js';
 import { clamp, damp, nextFrame, rng } from './core/util.js';
-import { detectGPU, pickPreset } from './gfx/gpu.js';
+import { detectGPU, pickPreset, prettyGPU } from './gfx/gpu.js';
 import { createNoise3D, canvasTex } from './gfx/noise.js';
 import { pm } from './gfx/materials.js';
 import { Atmosphere } from './gfx/sky.js';
@@ -108,7 +108,7 @@ async function boot() {
   // ---------------------------------------------------------------- build the world
   const step = async (p, msg, fn) => { ui.setLoading(p, msg); await nextFrame(); const t0 = performance.now(); await fn(); log(msg, Math.round(performance.now() - t0) + 'ms'); };
   const W = {};
-  const ctxB = { rand: rng(4711), mergeGeometries, canvasTex };
+  const ctxB = { rand: rng(4711), mergeGeometries, canvasTex, q };
   await step(0.08, 'Raising the skyline', async () => {
     city.buildGround(scene); city.buildHills(scene);
     W.skyline = city.buildSkyline(scene, glow, q); W.skyline.meshes.forEach((m) => m.layers.enable(1));
@@ -222,7 +222,7 @@ async function boot() {
         if (slow >= 3 && scale > 0.6) { scale = Math.max(0.6, scale - 0.05); slow = 0; resize(); }
         if (fast >= 8 && scale < maxScale) { scale = Math.min(maxScale, scale + 0.05); fast = 0; resize(); }
       }
-      if (game.settings.fps) ui.perf(`${fpsShow.toFixed(0)} fps  ${ms.toFixed(1)} ms\n${gpu.renderer.replace(/ANGLE \(|\)/g, '').slice(0, 46)}\npreset ${q.id}  scale ${Math.round(scale * 100)}%\ncalls ${renderer.info.render.calls}  tris ${(renderer.info.render.triangles / 1000).toFixed(0)}k`);
+      if (game.settings.fps) ui.perf(`${fpsShow.toFixed(0)} fps  ${ms.toFixed(1)} ms\n${prettyGPU(gpu.renderer)}\npreset ${q.id}  scale ${Math.round(scale * 100)}%\ncalls ${renderer.info.render.calls}  tris ${(renderer.info.render.triangles / 1000).toFixed(0)}k`);
       fpsAcc = 0; fpsN = 0;
     }
   }
