@@ -3,6 +3,7 @@
 // NPCs and interaction points. Exteriors carry big neon roof signs.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { G } from '../core/G.js';
 import { rng, clamp } from '../core/util.js';
 import { Kit, addCollider, mat4 } from './kit.js';
@@ -402,7 +403,7 @@ export function buildGrocery(scene, glow, ctx) {
   const green = pm('paint', { color: 0x2a8f4a, rough: 0.45, wet: 1 });
   const storeWall = pm('plaster', { color: 0xf1f2ee, interior: true });
   const mats = {
-    floor: pm('tile', { color: 0xdcdcd8, col2: 0x8a8a86, p: [0.6, 0.6, 0.005, 0], physical: true, clearcoat: 0.4, ccRough: 0.15, interior: true }),
+    floor: pm('tile', { color: 0xbdbdb8, col2: 0x6a6a68, p: [0.6, 0.6, 0.005, 0], physical: true, clearcoat: 0.4, ccRough: 0.15, interior: true }),
     roof: pm('concrete', { color: 0x777a7c, p: [0, 0, 0, 0], wet: 1 }),
     ceiling: pm('plaster', { color: 0xf4f4f0, interior: true }),
     wall: pm('paint', { color: 0xe8ebe4, rough: 0.6, wet: 1 }),
@@ -468,12 +469,12 @@ export function buildGrocery(scene, glow, ctx) {
     im.castShadow = false; im.receiveShadow = true; im.matrixAutoUpdate = false; im.updateMatrix(); im.computeBoundingSphere();
     par.add(im);
   };
-  const boxG = new THREE.BoxGeometry(1, 1, 1); boxG.translate(0, 0.5, 0);
-  const canG = new THREE.CylinderGeometry(0.5, 0.5, 1, 10); canG.translate(0, 0.5, 0);
+  const boxG = new RoundedBoxGeometry(1, 1, 1, 2, 0.045); boxG.translate(0, 0.5, 0);
+  const canG = new THREE.LatheGeometry([[0, 0], [0.44, 0], [0.5, 0.025], [0.5, 0.955], [0.46, 0.975], [0.46, 0.99], [0.4, 0.99], [0.4, 0.975], [0, 0.975]].map(([r, y]) => new THREE.Vector2(r, y)), 16);
   instBoxes(prods.boxes, boxG, pm('product', { color: 0xffffff, rough: 0.4, interior: true }));
   instBoxes(prods.cans, canG, pm('product', { color: 0xffffff, rough: 0.3, metal: 0.3, interior: true }));
   const botG = new THREE.LatheGeometry([[0, 0], [0.5, 0], [0.5, 0.55], [0.4, 0.68], [0.2, 0.76], [0.17, 0.8], [0.17, 0.92], [0.21, 0.93], [0.21, 1.0], [0, 1.0]].map(([r, y]) => new THREE.Vector2(r, y)), 14);
-  const jarG = new THREE.LatheGeometry([[0, 0], [0.5, 0], [0.5, 0.8], [0.44, 0.82], [0.44, 1.0], [0, 1.0]].map(([r, y]) => new THREE.Vector2(r, y)), 14);
+  const jarG = new THREE.LatheGeometry([[0, 0], [0.46, 0], [0.5, 0.03], [0.5, 0.78], [0.45, 0.8], [0.44, 0.83], [0.48, 0.84], [0.48, 0.985], [0.42, 1.0], [0, 1.0]].map(([r, y]) => new THREE.Vector2(r, y)), 16);
   instBoxes(prods.bottles, botG, pm('product', { color: 0xffffff, rough: 0.2, metal: 0.05, interior: true }));
   instBoxes(prods.jars, jarG, pm('product', { color: 0xffffff, rough: 0.25, interior: true }));
   // ---- produce (west), fridges (back wall), bakery/deli (east) ----

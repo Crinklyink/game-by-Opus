@@ -6,7 +6,7 @@ import { palette } from './palette.js';
 import { pm } from '../gfx/materials.js';
 import { rng } from '../core/util.js';
 import { finish, colBox, stool } from './furniture.js';
-import { shakerDoor, pullBar, flutes, mug, bookStack, branchVase, plate, cushion } from './shapes.js';
+import { shakerDoor, pullBar, flutes, mug, bookStack, branchVase, plate, cushion, stemGlass } from './shapes.js';
 import { leafGeometry } from './kit.js';
 
 export function buildKitchen(par, y0, ctx) {
@@ -99,6 +99,11 @@ export function buildKitchen(par, y0, ctx) {
   up(0.9, 2.9); up(4.4, 5.9);
   // open glass shelf above the sink window-side: cups + plates visible between uppers
   k.box(M.oak, 1.5, 0.035, 0.3, 3.65 + 0.0, 2.15, 0.15 - 0.0, { r: 0.004 });
+  const shelfY = 2.19;
+  for (let i = 0; i < 7; i++) plate(k, M.ceramic, 3.14, shelfY + i * 0.016, 0.15, 0.115);                                   // stacked plates
+  for (let i = 0; i < 4; i++) k.lathe(M.ceramic, [[0, 0], [0.05, 0], [0.09, 0.03], [0.1, 0.07], [0.095, 0.07], [0.085, 0.035], [0, 0.005]], 3.42, shelfY + i * 0.045, 0.15, { seg: 22 });   // nested bowls
+  for (let i = 0; i < 3; i++) stemGlass(k, M.glass, 3.9 + i * 0.085, shelfY, 0.12, 1);
+  for (let i = 0; i < 3; i++) mug(k, i % 2 ? M.ceramic : M.blackCeramic, 4.16 + i * 0.09, shelfY, 0.14, { r: 0.036, h: 0.085, ry: 0.5 + i });
   // hood: sloped canopy (extruded trapezoid) + chimney
   const hs = new THREE.Shape(); hs.moveTo(0, 0); hs.lineTo(0.52, 0); hs.lineTo(0.52, 0.02); hs.lineTo(0.28, 0.24); hs.lineTo(0, 0.24); hs.closePath();
   k.extrude(M.steel, hs, 1.1, 3.65 + 0.55, 1.5, 0.0, { ry: -Math.PI / 2, bevel: 0.004, seg: 4 });
@@ -132,10 +137,13 @@ export function buildKitchen(par, y0, ctx) {
   const ringM = pm('plain', { color: 0x2a2a2d, rough: 0.35, metal: 0.5, interior: true });
   for (const [bx, bz, br] of [[3.49, 0.19, 0.09], [3.81, 0.19, 0.075], [3.49, 0.41, 0.075], [3.81, 0.41, 0.1]]) { k.torus(ringM, br, 0.003, bx, BH + 0.041, bz, { rx: Math.PI / 2, seg: 30, seg2: 4 }); k.torus(ringM, br * 0.55, 0.002, bx, BH + 0.041, bz, { rx: Math.PI / 2, seg: 24, seg2: 4 }); }
   // ---- counter props ----
-  // kettle with handle + spout
-  k.lathe(M.steel, [[0, 0], [0.085, 0], [0.1, 0.09], [0.075, 0.2], [0.04, 0.225], [0.0, 0.225]], 4.28, BH + 0.042, 0.42, { seg: 26 });
-  k.torus(M.blackMetal, 0.06, 0.008, 4.28, BH + 0.16, 0.42 + 0.0, { rx: 0, rz: 0, seg: 16, seg2: 5 });
-  k.cyl(M.blackMetal, 0.012, 0.012, 0.02, 4.28, BH + 0.225, 0.42, { seg: 8 });
+  // kettle: cylindrical body, spout, lid knob and an arched handle
+  { const kx = 4.28, kz = 0.42, ky = BH + 0.042;
+    k.lathe(M.steel, [[0, 0], [0.085, 0], [0.098, 0.012], [0.1, 0.14], [0.088, 0.19], [0.05, 0.215], [0.0, 0.22]], kx, ky, kz, { seg: 28 });
+    k.cyl(M.blackMetal, 0.012, 0.012, 0.03, kx, ky + 0.218, kz, { seg: 8 }); k.sph(M.blackMetal, 0.016, kx, ky + 0.255, kz, { seg: 8, seg2: 6 });
+    k.strut(M.steel, [kx + 0.085, ky + 0.09, kz], [kx + 0.185, ky + 0.2, kz], 0.028, 0.013, { seg: 10 });
+    k.tube(M.blackMetal, [[kx - 0.06, ky + 0.2, kz], [kx - 0.13, ky + 0.27, kz], [kx - 0.16, ky + 0.16, kz], [kx - 0.11, ky + 0.06, kz]], 0.009, { seg: 16, radial: 6 });
+  }
   // espresso machine
   const ex = 5.35, ez = 0.3, eh = BH + CT;
   k.box(M.steel, 0.3, 0.34, 0.3, ex, eh, ez, { r: 0.02, seg: 3 });

@@ -227,6 +227,7 @@ export function buildBlocks(scene, glow, planarOnly = false) {
 
   // instanced facade boxes
   const mat0 = facadeMaterial(true);
+  for (const b of instBoxes) if (b.h + b.y0 > 8) G.heights.push({ cx: b.cx, cz: b.cz, w: b.w, d: b.d, h: b.h, y0: b.y0 });
   const geo = facadeBoxGeometry();
   const inst = new THREE.InstancedMesh(geo, mat0, instBoxes.length);
   const m4 = new THREE.Matrix4(), col = new THREE.Color();

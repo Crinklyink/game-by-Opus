@@ -67,8 +67,8 @@ export function cushion(k, mat, w, h, d, x, y, z, o = {}) {
 
 // Throw pillow: pinched corners, centre dimple. (superellipsoid; e<1 boxier)
 export function throwPillow(k, mat, w, h, d, x, y, z, o = {}) {
-  const e = o.e ?? 0.62;
-  const geo = new THREE.SphereGeometry(1, 28, 20);
+  const e = o.e ?? 0.5;
+  const geo = new THREE.SphereGeometry(1, 32, 22);
   const p = geo.attributes.position;
   for (let i = 0; i < p.count; i++) {
     let px = p.getX(i), py = p.getY(i), pz = p.getZ(i);

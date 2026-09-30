@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { G } from '../core/G.js';
 import { COMMON, SKY, PROC } from './glsl.js';
 import { SDF_GLSL } from './sdf.js';
+import { FAR_GLSL } from './farshadow.js';
 
 // optional per-kind vertex code for pm() materials: { head, normal, begin } (see patchMaterial)
 export const VERT = {};
@@ -16,7 +17,7 @@ const cache = new Map();
 export const interiorMats = new Set();
 
 const SHARED = ['uNoise3', 'uTime', 'uNight', 'uWet', 'uSunDir', 'uMoonDir', 'uZenith', 'uHorizon', 'uSunCol', 'uGlowCol',
-  'uCityGlow', 'uCloudCov', 'uCloudDark', 'uDisk', 'uFogDen', 'uFogH', 'uFlash', 'tSdf', 'tVis', 'uSdfMin', 'uSdfInv', 'uSdfCfg', 'uSdfCfg2', 'uSdfDbg'];
+  'uCityGlow', 'uCloudCov', 'uCloudDark', 'uDisk', 'uFogDen', 'uFogH', 'uFlash', 'tSdf', 'tVis', 'uSdfMin', 'uSdfInv', 'uSdfCfg', 'uSdfCfg2', 'uSdfDbg', 'tHeight', 'uHeightCfg'];
 
 const VERT_HEAD = 'varying vec3 vWPos; varying vec3 vLocal; varying vec3 vWNormal; varying vec2 vUvP;';
 const VERT_INJECT = /* glsl */`
@@ -54,10 +55,16 @@ const rep = (src, from, to, tag) => {
   if (!src.includes(from)) { console.error('[floor48] shader chunk patch missed:', tag); return src; }
   return src.replace(from, to);
 };
-let _lightsBegin = null, _lightsMaps = null;
+let _lightsBegin = null, _lightsBase = null, _lightsMaps = null;
+const SUN_FAR = 'getDirectionalLightInfo( directionalLight, directLight );';
+// every patched material: the sun is also shadowed by the distant city (height map march)
+function lightsBase() {
+  if (_lightsBase) return _lightsBase;
+  return (_lightsBase = rep(THREE.ShaderChunk.lights_fragment_begin, SUN_FAR, SUN_FAR + '\n\t\tdirectLight.color *= farSunV;', 'sunfar'));
+}
 function lightsBegin() {
   if (_lightsBegin) return _lightsBegin;
-  let c = THREE.ShaderChunk.lights_fragment_begin;
+  let c = lightsBase();
   c = rep(c, 'IncidentLight directLight;', /* glsl */`IncidentLight directLight;
 #ifdef SDF_ON
 vec3 sdfFill = vec3(0.0);
@@ -135,12 +142,13 @@ uniform float uScale, uWetAmt, uWet;
 ${sdfDefs}
 ${COMMON}
 ${SKY}
+${FAR_GLSL}
 ${uni.sdf ? SDF_GLSL : ''}
 ${FRAG_LIB}
 ${extra}
 ${procSrc}
 `)
-    .replace('#include <lights_fragment_begin>', uni.sdf ? lightsBegin() : '#include <lights_fragment_begin>')
+    .replace('#include <lights_fragment_begin>', uni.sdf ? lightsBegin() : lightsBase())
     .replace('#include <lights_fragment_maps>', uni.sdf ? lightsMaps() : '#include <lights_fragment_maps>')
     .replace('#include <color_fragment>', /* glsl */`
 #include <color_fragment>
@@ -157,6 +165,7 @@ float sdfF = 0.0, sdfAOv = 1.0; vec3 sdfP = vWPos;
 sdfF = sdfFade(vWPos);
 if (sdfF > 0.0) { sdfP = vWPos + pn * 0.03; sdfAOv = mix(1.0, sdfAO(sdfP, pn), sdfF); }
 #endif
+float farSunV = sdfF > 0.02 ? 1.0 : farSun(vWPos + pn * 0.15);      // inside a lit interior the sun's shadow map is exact; outside, the distant city shades the sun
 `)
     .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = clamp(ps.rough, 0.04, 1.0);')
     .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = ps.metal;')
@@ -174,7 +183,7 @@ export function pm(kind = 'plain', o = {}) {
   const params = { color: o.color ?? 0xffffff, roughness: o.rough ?? 0.6, metalness: o.metal ?? 0, envMapIntensity: o.env ?? 1 };
   if (o.emissive != null) { params.emissive = o.emissive; params.emissiveIntensity = o.emissiveI ?? 1; }
   if (o.side != null) params.side = o.side;
-  if (o.transparent) { params.transparent = true; params.opacity = o.opacity ?? 1; }
+  if (o.transparent) { params.transparent = true; params.opacity = o.opacity ?? 1; if (o.depthWrite === false) params.depthWrite = false; }
   if (o.alphaTest) params.alphaTest = o.alphaTest;
   if (o.glass) {   // clear glass: the surface adds its (Fresnel) reflections on top of what is behind it instead of being scaled by alpha
     Object.assign(params, { transparent: true, opacity: o.opacity ?? 0.08, depthWrite: false, blending: THREE.CustomBlending, blendEquation: THREE.AddEquation,

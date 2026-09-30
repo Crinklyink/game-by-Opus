@@ -27,6 +27,19 @@ If you have a laptop with two GPUs and it looks slow: make sure the browser is s
 (Windows: Settings -> System -> Display -> Graphics -> add Chrome/Edge -> *High performance*), and that
 *hardware acceleration* is on (`chrome://settings/system`). Press **F3** in game to see the detected GPU, fps, and render scale.
 
+## What makes it look the way it does
+
+* **Interior light volumes.** When the game loads it bakes a signed-distance field and a sky-visibility map for the
+  apartment, lobby, diner and grocery straight from the shapes they were modelled with. Every interior surface then gets
+  contact shadows in corners and under furniture, soft shadows from the strongest lamps, ambient light that fades with
+  distance from the windows, and real spot-light pools from the ceiling downlights.
+* **Far-field sun shadows.** A height map of the whole city is marched toward the sun, so towers throw long soft shadows
+  across streets and rooftops at low sun angles (best at sunrise and sunset), plus screen-space light shafts on High/Ultra.
+* **Procedural materials with real relief:** plank floors with chamfers and wear, tiled walls with glazed bevels, plaster
+  with roller marks, bark, weathered pavement (slab settlement, trench repairs, tar-sealed cracks), car paint with panel seams, clear glass.
+* **Detailed modelling:** piped upholstery, turned legs, shaker cabinets, tableware, split-leaf plants, diner booths and
+  chrome chairs, street furniture, windows set back in their reveals with frames and sills.
+
 ## Controls
 
 | Key | Action |

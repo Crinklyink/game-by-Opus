@@ -7,6 +7,7 @@ import { P, STREET_W, FLOOR_H, APT_Y, TOWER, TOWER_TOP, LOBBY_H } from './consts
 import { facadeMaterial, facadeBoxGeometry } from '../gfx/facade.js';
 import { COMMON, SKY } from '../gfx/glsl.js';
 import { pm } from '../gfx/materials.js';
+import { FAR_GLSL } from '../gfx/farshadow.js';
 
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const mergeTanks = (parts) => { for (const g of parts) for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k); return mergeGeometries(parts, false); };
@@ -48,6 +49,7 @@ export function buildSkyline(scene, glow, q) {
 
   function add(list, cx, cz, w, d, h, y0, style, tint, bay, fh) {
     list.push({ cx, cz, w, d, h, y0, style, tint, bay, fh, seed: R() });
+    if (h + y0 > 8) G.heights.push({ cx, cz, w, d, h, y0 });
   }
   const pickTint = (style) => style === 0 ? GLASS_TINTS[Math.floor(R() * GLASS_TINTS.length)] : style === 3 ? BRICK_TINTS[Math.floor(R() * BRICK_TINTS.length)] : CONCRETE_TINTS[Math.floor(R() * CONCRETE_TINTS.length)];
 
@@ -195,6 +197,7 @@ const GROUND_FRAG = /* glsl */`
 varying vec3 vWPos;
 ${COMMON}
 ${SKY}
+${FAR_GLSL}
 uniform float uWet; uniform float uPitch;
 
 vec3 lampField(vec2 w, float fp, vec2 axisDist, bool alongX, float s, float off, vec2 camDir, float wetK){
@@ -247,7 +250,7 @@ void main(){
   float sunUp = max(uSunDir.y, 0.0);
   vec3 sunL = uSunCol * sunUp * 3.0 * (1.0 - uCloudCov*0.75) * (1.0 - uNight);
   vec3 amb = mix(uZenith, uHorizon, 0.35) * 0.75 + uCityGlow*2.0;
-  vec3 col = alb * (sunL * 0.32 + amb);
+  vec3 col = alb * (sunL * 0.32 * farSun(wp + vec3(0.0, 0.3, 0.0)) + amb);
 
   // street lamps + traffic (only near street axes)
   bool alongX = dStreetX < dStreetZ;
@@ -305,6 +308,7 @@ export function buildGround(scene) {
       uNoise3: G.u.uNoise3, uSunDir: G.u.uSunDir, uMoonDir: G.u.uMoonDir, uZenith: G.u.uZenith, uHorizon: G.u.uHorizon, uSunCol: G.u.uSunCol,
       uGlowCol: G.u.uGlowCol, uCityGlow: G.u.uCityGlow, uNight: G.u.uNight, uCloudCov: G.u.uCloudCov, uCloudDark: G.u.uCloudDark, uDisk: G.u.uDisk,
       uTime: G.u.uTime, uFogDen: G.u.uFogDen, uFogH: G.u.uFogH, uFlash: G.u.uFlash, uWet: G.u.uWet, uPitch: { value: P },
+      tHeight: G.u.tHeight, uHeightCfg: G.u.uHeightCfg,
     },
     vertexShader: GROUND_VERT, fragmentShader: GROUND_FRAG, side: THREE.DoubleSide, fog: false,
   });

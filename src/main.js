@@ -10,6 +10,7 @@ import { PostFX } from './gfx/postfx.js';
 import { GlowField } from './gfx/glow.js';
 import { LightPool } from './gfx/lights.js';
 import { initSdfUniforms, bakeSdf, activateSdf, SDF } from './gfx/sdf.js';
+import { initFarShadow, bakeHeights, FAR } from './gfx/farshadow.js';
 import { PlanarReflection } from './gfx/planar.js';
 import { InteriorProbe } from './gfx/probe.js';
 import { setInteriorEnv } from './gfx/materials.js';
@@ -75,7 +76,7 @@ async function boot() {
   const post = new PostFX(renderer, q); G.post = post;
   const planar = new PlanarReflection(renderer, q); G.planar = planar;
   const glow = new GlowField(6144); G.glow = glow; scene.add(glow.mesh);
-  initSdfUniforms();
+  initSdfUniforms(); initFarShadow();
   const pool = new LightPool(scene, q.lights, q.spots || 0); G.pool = pool;
   atmo.dome.layers.enable(1); glow.mesh.layers.enable(1);
   const audio = new GameAudio(); G.audio = audio;
@@ -129,12 +130,14 @@ async function boot() {
   await step(0.76, 'Installing the elevator', async () => { W.elevator = buildElevator(scene); G.elevator = W.elevator; W.lobby = buildLobby(scene, { rand: rng(31) }); });
   await step(0.84, 'Opening the shops', async () => { W.shops = { burger: buildBurger(scene, glow, { rand: rng(51) }), grocery: buildGrocery(scene, glow, { rand: rng(52) }) }; });
   await step(0.88, 'Baking the interior light volumes', async () => {
+    G.heights.push({ cx: -40, cz: 40, w: 40, d: 40, h: 169, y0: 0 });     // Meridian Tower itself
+    bakeHeights(); log('city height map:', FAR.boxes, 'buildings');
     if (!q.sdf) return;
     const V = (x, y, z) => new THREE.Vector3(x, y, z), vox = q.sdfVoxel, em = G.emitters;
     bakeSdf(G.occ, { name: 'apt', min: V(-51, APT_Y - 0.7, 13), max: V(-17, APT_Y + 4.3, 41.5), voxel: vox, emitters: em, floorY: APT_Y, ceilH: CEIL_H, ceilZ0: 20.45, cfg: { bounce: 0.035, floor: 0.005, sun: 0.1 } });
     bakeSdf(G.occ, { name: 'lobby', min: V(-54, -0.7, 18.5), max: V(-20, 7.6, 41.5), voxel: vox * 1.3, emitters: em, floorY: 0, cfg: { bounce: 0.05, floor: 0.02, sun: 0.4 } });
     bakeSdf(G.occ, { name: 'burger', min: V(16, -0.7, -38), max: V(54, 6.2, -10), voxel: vox * 1.3, emitters: em, floorY: 0, cfg: { bounce: 0.11, floor: 0.15, sun: 0.25 } });
-    bakeSdf(G.occ, { name: 'grocery', min: V(16, -0.7, 10), max: V(66, 7.4, 44), voxel: vox * 1.45, emitters: em, floorY: 0, cfg: { bounce: 0.1, floor: 0.16, sun: 0.25 } });
+    bakeSdf(G.occ, { name: 'grocery', min: V(16, -0.7, 10), max: V(66, 7.4, 44), voxel: vox * 1.45, emitters: em, floorY: 0, cfg: { bounce: 0.085, floor: 0.11, sun: 0.25 } });
     G.u.uSdfCfg.value.set(0, q.sdfAO, 0.035, 0.005);
     log('light volumes:', Object.values(SDF.volumes).map((v) => `${v.name} ${v.count}occ ${v.ms}ms (splat ${v.splatMs})`).join(' | '));
   });

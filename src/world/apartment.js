@@ -224,7 +224,7 @@ export function buildApartment(scene, ctx) {
   addCollider(-49.1, -34.0, UNIT.z0 - 0.12, UNIT.z0 + 0.06, Y, Y + CH, 1);
   // handle
   // ================================================================== curtains (sheer, per bay, two panels)
-  const sheerMat = new THREE.MeshStandardMaterial({ color: 0xf1ece0, roughness: 1, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
+  const sheerMat = pm('fabric', { color: 0xf1ece0, rough: 1, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, interior: true, env: 0.4 });
   const curtainGroup = new THREE.Group(); par.add(curtainGroup);
   const curtainBays = [0, 1, 2, 3, 4];
   const panelGeo = new THREE.PlaneGeometry(1, CH - 0.55, 24, 1);
@@ -332,6 +332,16 @@ export function buildApartment(scene, ctx) {
   BED.lampPos.forEach((p) => gEmit(groups.bedroom, { pos: p, color: 0xffb870, intensity: 32, distance: 6 }));
   gEmit(groups.bedroom, { pos: new THREE.Vector3(-45.5, Y + 2.3, 25.0), color: 0xffe0c0, intensity: 15, distance: 10 });
   buildDresser(par, Y, -42.34, 25.9, -Math.PI / 2);
+  // leaning full-length mirror + a plant in the north-west corner + a woven laundry basket
+  { const mk = new Kit(); const mm = pm('plain', { color: 0xdfe6ea, metal: 1, rough: 0.02, interior: true });
+    mk.box(M.walnut, 0.62, 1.7, 0.035, 0, 0.0, 0, { r: 0.008, rx: -0.09 }); mk.box(mm, 0.54, 1.6, 0.006, 0, 0.05, 0.021, { rx: -0.09 });
+    F.finish(par, mk, -42.16, Y, 27.9, -Math.PI / 2 + 0.0, { });
+    const bk = new Kit(); const wick = pm('rug', { color: 0xb8956a, col2: 0x7a5a38, p: [4, 0.2, 0.2, 0], interior: true });
+    bk.lathe(wick, [[0, 0], [0.2, 0], [0.24, 0.05], [0.27, 0.45], [0.28, 0.5], [0.255, 0.5], [0.23, 0.45], [0, 0.05]], 0, 0, 0, { seg: 24 });
+    for (const yy of [0.12, 0.26, 0.4]) bk.torus(wick, 0.255 + yy * 0.05, 0.007, 0, yy, 0, { rx: Math.PI / 2, seg: 24, seg2: 5 });
+    bk.pillow(M.linen, 0.3, 0.16, 0.3, 0, 0.42, 0, { e: 0.6 }); bk.pillow(M.navy, 0.28, 0.1, 0.26, 0.03, 0.55, 0.02, { e: 0.6, ry: 0.5 });
+    F.finish(par, bk, -48.3, Y, 27.3, 0); F.colBox(-48.3, 27.3, 0.56, 0.56, 0, Y, Y + 0.5); }
+  F.fiddleFig(par, Y, -48.25, 21.55, 0.8, 8);
   buildWardrobe(par, Y, -47.6, 28.59, Math.PI, 2.6);
   const RC = buildReadingCorner(par, Y, -43.3, 21.95);
   retarget(RC.lamp.group, groups.bedroom, M);
@@ -363,8 +373,11 @@ export function buildApartment(scene, ctx) {
         k.box(dm, mw, ph - 2 * mw, 0.012, w / 2 - pw / 2 + mw / 2, py + mw, zf, { r: 0.002 }); k.box(dm, mw, ph - 2 * mw, 0.012, w / 2 + pw / 2 - mw / 2, py + mw, zf, { r: 0.002 });
       }
     }
-    k.box(M.brass, 0.14, 0.03, 0.06, w - 0.09, 1.02, 0, { r: 0.006 });
-    k.cyl(M.brass, 0.012, 0.012, 0.07, w - 0.05, 1.02, 0.03, { rx: Math.PI / 2, cy: true, seg: 10 });
+    for (const fs of [1, -1]) {                                            // lever handle with a round rose on both faces
+      k.cyl(M.brass, 0.032, 0.034, 0.012, w - 0.07, 1.02, fs * (t / 2 + 0.006), { rx: Math.PI / 2, cy: true, seg: 20 });
+      k.cyl(M.brass, 0.011, 0.011, 0.034, w - 0.07, 1.02, fs * (t / 2 + 0.024), { rx: Math.PI / 2, cy: true, seg: 8 });
+      k.box(M.brass, 0.17, 0.02, 0.022, w - 0.07 - 0.075, 1.02, fs * (t / 2 + 0.042), { r: 0.009, seg: 3 });
+    }
     if (o.peep) { k.cyl(M.brass, 0.008, 0.008, 0.02, w / 2, 1.55, 0.02, { rx: Math.PI / 2, cy: true, seg: 8 }); k.box(M.brass, 0.1, 0.06, 0.01, w / 2, 1.9, 0.024); }
     const pivot = new THREE.Group();
     const mesh = new THREE.Group(); k.mesh(mesh, { occ: false }); pivot.add(mesh);
@@ -436,9 +449,14 @@ export function buildApartment(scene, ctx) {
 
   // ================================================================== bookkeeping
   out.tvScreen = tvScreen;
+  // the TV throws coloured light into the room while it is on
+  const tvLight = emit({ pos: new THREE.Vector3(-41.2, Y + 1.4, 27.0), color: 0x6a5cff, intensity: 6, distance: 6, on: !!tvScreen.on, priority: 1.2 });
+  out.tvLight = tvLight;
   out.setAllLights = (v) => { for (const g of Object.values(groups)) g.set(v); };
   out.update = (dt, t) => {
     out.updateCurtains(dt);
+    tvLight.on = !!tvScreen.on;
+    tvLight.color.setHSL(0.72 + 0.09 * Math.sin(t * 0.35) + 0.06 * Math.sin(t * 1.1), 0.75, 0.55);
     for (const d of doors) {
       d.ang += (d.target - d.ang) * (1 - Math.exp(-dt * 5));
       d.pivot.rotation.y = d.closedRot - d.ang * Math.PI * 0.5;
