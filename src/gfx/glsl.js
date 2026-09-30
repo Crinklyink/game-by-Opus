@@ -10,7 +10,7 @@ vec2 hash22(vec2 p){ vec3 p3 = fract(vec3(p.xyx)*vec3(.1031,.1030,.0973)); p3 +=
 vec3 hash33(vec3 p3){ p3 = fract(p3*vec3(.1031,.1030,.0973)); p3 += dot(p3, p3.yxz+33.33); return fract((p3.xxy+p3.yxx)*p3.zyx); }
 vec4 nz(vec3 p){ return texture(uNoise3, p); }
 float sat1(float x){ return clamp(x, 0.0, 1.0); }
-float dfade(vec3 wp, float feat){ float fp = length(fwidth(wp)); return 1.0 - smoothstep(feat*0.7, feat*4.0, fp); }
+float dfade(vec3 wp, float feat){ float fp = length(fwidth(wp)); return 1.0 - smoothstep(feat*0.22, feat*2.2, fp); }
 `;
 
 // Sky colour + atmospheric fog. Uniforms come from G.u (see G.js).
@@ -184,13 +184,16 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
 uniform vec3 uCol2; uniform vec4 uP;
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   vec3 q = uP.x > 1.5 ? p.zyx : (uP.x > 0.5 ? p.yxz : p);       // grain runs along q.x
+  float fpw = length(fwidth(q));                                   // pixel footprint: fine grain fades out instead of aliasing into bands
+  float h1 = 1.0 - smoothstep(0.004, 0.014, fpw), h2 = 1.0 - smoothstep(0.0015, 0.006, fpw);
   vec3 warp = nz(q*vec3(0.35,2.2,2.2)).rgb - 0.5;
-  float r = length(q.yz + warp.yz*0.022) * 26.0 + warp.x*0.7;
+  float r = length(q.yz + warp.yz*0.05) * 22.0 + warp.x*1.4 + nz(q*vec3(0.25, 1.3, 1.3)).g * 3.2;   // wandering rings: cathedral grain instead of even stripes
   float ring = fract(r);
-  ring = smoothstep(0.0,0.6,ring)*smoothstep(1.0,0.55,ring);
-  float fine = nz(q*vec3(1.2, 34.0, 34.0)).b;
-  float streak = nz(q*vec3(0.9, 90.0, 90.0)).a;
-  s.alb = mix(s.alb, uCol2, ring*0.5 + fine*0.14) * (0.94 + 0.1*streak);
+  float rtone = 0.9 + 0.2 * hash11(floor(r) * 1.7);
+  ring = mix(0.5, smoothstep(0.0,0.6,ring)*smoothstep(1.0,0.55,ring), h1);
+  float fine = mix(0.5, nz(q*vec3(1.2, 34.0, 34.0)).b, h1);
+  float streak = mix(0.5, nz(q*vec3(0.9, 90.0, 90.0)).a, h2);
+  s.alb = mix(s.alb, uCol2, ring*0.5 + fine*0.14) * (0.94 + 0.1*streak) * mix(1.0, rtone, h1);
   s.rough = 0.36 + 0.12*fine;
   s.h = ((ring-0.5)*0.00018 + (fine-0.5)*0.00014) * dfade(wp, 0.005);
 }`,

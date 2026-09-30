@@ -207,7 +207,7 @@ export function buildProps(scene, glow, ctx) {
       lk.cyl(dark, 0.05, 0.08, 3.6, x, GY, z, { seg: 8 }); lk.cyl(dark, 0.1, 0.12, 0.4, x, GY, z, { seg: 8 });
       lk.sph(lampH, 0.2, x, GY + 3.75, z, { seg: 12, seg2: 8 });
       lk.cyl(dark, 0.22, 0.05, 0.12, x, GY + 3.9, z, { seg: 12 });
-      const e = LightPool.add({ pos: new THREE.Vector3(x, GY + 3.6, z), color: 0xffe0b0, intensity: 300, distance: 22, on: false, priority: 1.05 });
+      const e = LightPool.add({ pos: new THREE.Vector3(x, GY + 3.6, z), color: 0xffe0b0, intensity: 200, distance: 22, on: false, priority: 1.05 });
       (out.parkLights = out.parkLights || []).push(e);
       glow.add(x, GY + 3.75, z, 0xffe6b8, 0, 0.3, 0, 100); out.parkGlow = out.parkGlow || []; out.parkGlow.push(glow.count - 1);
     }

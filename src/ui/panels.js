@@ -39,16 +39,16 @@ export function openMarket(game) {
       <div class="col">
         <div class="row" style="margin-bottom:8px"><div><div class="big" style="font-size:30px">${tk.sym} <span style="font-size:22px">${tk.price.toFixed(2)}</span></div><div style="color:var(--dim);font-size:13px">${tk.name} · ${tk.sector}</div></div>
           <div class="grow"></div><div style="text-align:right"><div class="${tk.chg >= 0 ? 'up' : 'down'}" style="font-size:20px;font-weight:700">${pct(tk.chg)}</div><div style="color:var(--dim);font-size:12px">since the open</div></div></div>
-        <canvas id="chart" width="1000" height="290"></canvas>
-        <h3>News wire</h3>
-        <div style="font-size:13px;line-height:1.7;color:#c9d6e2;max-height:96px;overflow:hidden">${mk.headlines.slice(-4).reverse().map((h, i) => `<div style="opacity:${1 - i * 0.2}">• ${h}</div>`).join('')}</div>
+        <canvas id="chart" width="1000" height="270"></canvas>
+        <h3 style="margin-top:12px">News wire</h3>
+        <div style="font-size:13px;line-height:1.55;color:#c9d6e2;max-height:84px;overflow:hidden">${mk.headlines.slice(-4).reverse().map((h, i) => `<div style="opacity:${1 - i * 0.2}">• ${h}</div>`).join('')}</div>
       </div>
       <div class="col">
         <h3 style="margin-top:0">Order ticket</h3>
         <div class="card" style="margin-bottom:10px"><div style="color:var(--dim);font-size:12px">Buying power</div><div class="price" style="font-size:20px">${fmtMoney(S.cash)}</div>
         <div style="color:var(--dim);font-size:12px;margin-top:6px">Position: <b style="color:#fff">${pos ? pos.shares : 0}</b> sh ${pos && pos.shares ? `@ ${pos.avg.toFixed(2)}` : ''}</div></div>
-        <div class="row" style="margin-bottom:8px"><input type="number" id="qty" min="1" value="${qty}"><div class="grow"></div>
-          <button class="btn small" data-q="1">1</button><button class="btn small" data-q="5">5</button><button class="btn small" data-q="max">Max</button></div>
+        <input type="number" id="qty" min="1" value="${qty}" style="width:100%;margin-bottom:8px">
+        <div class="row" style="gap:6px;margin-bottom:10px"><button class="btn small grow" data-q="1">1</button><button class="btn small grow" data-q="5">5</button><button class="btn small grow" data-q="25">25</button><button class="btn small grow" data-q="max">Max</button></div>
         <div style="font-size:12.5px;color:var(--dim);margin-bottom:10px">Est. total <b style="color:#fff" id="est">${fmtMoney(tk.price * qty * 1.0008)}</b></div>
         <div class="row"><button class="btn buy grow" data-o="buy" ${open ? '' : 'disabled'}>Buy</button><button class="btn sell grow" data-o="sell" ${open && pos && pos.shares ? '' : 'disabled'}>Sell</button></div>
         <div style="font-size:12px;color:var(--dim);margin-top:10px;line-height:1.5">${open ? 'Market orders fill instantly at the current price plus a tiny spread.' : 'Orders only fill while the market is open (9:30 AM – 4:00 PM).'}</div>

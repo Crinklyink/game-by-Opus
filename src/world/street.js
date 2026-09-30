@@ -45,7 +45,7 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   float fp = length(fwidth(w));
   float n1 = nz(vec3(w*0.11, 0.37)).r, n2 = nz(vec3(w*0.85, 0.71)).b, sp = nz(vec3(w*48.0, 0.9)).g, big = nz(vec3(w*0.031, 0.2)).r;
   vec3 col; float rough; float hgt = 0.0; float refl = 0.0;
-  float puddle = 0.0;
+  float puddle = 0.0; float aoJ = 1.0;
   if (!top) {
     // ------- asphalt -------
     col = vec3(0.052, 0.053, 0.058) * (0.7 + 0.6*n1) * (0.9 + 0.22*n2);
@@ -94,10 +94,10 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
     float chip = smoothstep(0.55, 0.9, nz(vec3(w*5.0, 0.4)).g) * mark;
     col = mix(col, mcol * (0.75 + 0.25*n2) * (1.0 - 0.3*chip), mark * 0.92 * (1.0 - 0.45*wet));
     // cracks
-    float crack = smoothstep(0.012, 0.0, abs(nz(vec3(w*0.9 + 0.3, 0.1)).r - 0.5) - 0.0) * smoothstep(0.55, 0.75, big);
+    float crack = smoothstep(0.012, 0.0, abs(nz(vec3(w*0.9 + 0.3, 0.1)).r - 0.5) - 0.0) * smoothstep(0.55, 0.75, big) * (1.0 - smoothstep(0.02, 0.12, fp));
     col *= 1.0 - 0.6*crack;
     rough = 0.9 - 0.12*repair;
-    hgt = (sp - 0.5) * 0.0025 * (1.0 - smoothstep(0.02, 0.15, fp)) - crack*0.004;
+    hgt = (sp - 0.5) * 0.0025 * (1.0 - smoothstep(0.006, 0.05, fp)) - crack*0.004*(1.0 - smoothstep(0.005, 0.03, fp));
     // gutter strip next to the kerb is dirtier & wetter
     float gut = smoothstep(1.3, 0.0, 7.0 - min(sd.x, sd.y) ) * smoothstep(0.0, 0.2, 7.0 - min(sd.x, sd.y)) * (inter ? 0.0 : 1.0);
     col *= 1.0 - 0.25*gut;
@@ -110,13 +110,16 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
     vec2 gsz = plaza ? vec2(0.75) : vec2(1.5);
     vec2 gid = floor(w / gsz), gf = fract(w / gsz);
     float joint = min(min(gf.x, 1.0-gf.x)*gsz.x, min(gf.y, 1.0-gf.y)*gsz.y);
-    float jm = smoothstep(0.012, 0.024, joint);
+    float jw = max(0.024, fp * 1.4);                               // joints widen to a pixel at range but keep their average darkness
+    float jm = smoothstep(jw * 0.5, jw, joint);
+    float jd = (1.0 - jm) * min(1.0, 0.03 / jw);
     float tone = hash21(gid);
-    vec3 base = plaza ? vec3(0.19, 0.175, 0.16) : vec3(0.20, 0.198, 0.19);
+    vec3 base = plaza ? vec3(0.145, 0.133, 0.122) : vec3(0.155, 0.153, 0.147);
     col = base * (0.85 + 0.3*tone) * (0.8 + 0.4*n1) * (0.92 + 0.16*n2);
-    float grain = nz(vec3(w*22.0, 0.3)).g;
+    float gfade = 1.0 - smoothstep(0.03, 0.22, fp);
+    float grain = mix(0.5, nz(vec3(w*22.0, 0.3)).g, gfade);
     col *= 0.94 + 0.12*grain;
-    col *= mix(0.55, 1.0, jm);
+    col *= 1.0 - 0.45*jd;
     // kerb granite band
     float granite = 1.0 - smoothstep(0.24, 0.3, side);
     col = mix(col, vec3(0.34, 0.335, 0.33) * (0.8 + 0.4*nz(vec3(w*15.0, 0.6)).b), granite);
@@ -127,7 +130,8 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
     // tactile paving strip at the crosswalk ends
     float tact = step(7.05, dmin) * step(dmin, 8.0);
     rough = 0.86 - 0.2*granite;
-    hgt = -(1.0 - jm) * 0.004 + (grain - 0.5) * 0.0006 * (1.0 - smoothstep(0.02, 0.15, fp));
+    aoJ = 1.0 - 0.7 * jd;                              // joints read as darkness + occlusion (a height step here shimmers into dots)
+    hgt = (grain - 0.5) * 0.0006 * (1.0 - smoothstep(0.006, 0.05, fp));
     puddle = smoothstep(0.5, 0.66, nz(vec3(w*0.2, 0.4)).r*0.6 + n1*0.4) * 0.8;
     refl = 0.55;
   }
@@ -139,7 +143,7 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   rough = mix(rough, 0.035, clamp(pud*1.4, 0.0, 1.0));
   float rip = uRain > 0.02 ? ripple(w, uTime, uRain) * clamp(pud*2.0 + film*0.5, 0.0, 1.0) : 0.0;
   hgt += rip * 0.0011;
-  s.alb = col; s.rough = rough; s.metal = 0.0; s.h = hgt;
+  s.alb = col; s.rough = rough; s.metal = 0.0; s.h = hgt; s.ao = aoJ;
   // ------- planar reflection -------
   if (uPlanarOn > 0.5 && wet > 0.02) {
     vec3 V = normalize(cameraPosition - wp);
@@ -266,7 +270,7 @@ export function buildStreet(scene, glow, planar, ctx) {
   for (const l of out.lamps) heads.box(headMat, 0.78, 0.03, 0.26, l.x, l.y - 0.07, l.z);
   heads.mesh(scene, { cast: false, reflect: true });
   for (const l of out.lamps) {
-    const e = LightPool.add({ pos: new THREE.Vector3(l.x, l.y - 0.3, l.z), color: 0xfff0d8, intensity: 300, distance: 24, on: false, priority: 1.1 });
+    const e = LightPool.add({ pos: new THREE.Vector3(l.x, l.y - 0.3, l.z), color: 0xfff0d8, intensity: 210, distance: 24, on: false, priority: 1.1 });
     emitters.push(e);
     l.glow = glow.add(l.x, l.y - 0.08, l.z, 0xfff0d8, 0, 0.32, 0, 100);
     l.e = e;

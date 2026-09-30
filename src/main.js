@@ -208,7 +208,9 @@ async function boot() {
     post.focus = damp(post.focus, clamp(player.hover ? player.hover.pos.distanceTo(camera.position) : 14, 1.2, 60), 4, dt);
     if (!render) return;
     planar.update(scene, camera, streetMod.ROAD_Y, camera.position.y < 40 && G.u.uWet.value > 0.03 && (!game.zone || !game.zone.indoor));
-    post.render(scene, camera, dt, elapsed, { glass: true, expMin: 0.24, expKey: 0.2, dof: !modal, dofScale: 0.8 });
+    const zn0 = game.zone ? game.zone.name : 'apartment';
+    const expKey = 0.2 * (1 - ((zn0 === 'street' || zn0 === 'park') ? 0.5 : 0.3) * atmo.night);      // nights stay dark instead of being normalised to daylight
+    post.render(scene, camera, dt, elapsed, { glass: true, expMin: 0.24, expKey, dof: !modal, dofScale: 0.8 });
     // dynamic resolution + fps overlay
     fpsAcc += dt; fpsN++;
     if (fpsAcc >= 0.5) {
