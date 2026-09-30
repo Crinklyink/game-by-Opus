@@ -1,0 +1,13 @@
+import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import path from 'node:path'; import { fileURLToPath } from 'node:url';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--use-gl=angle', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'] });
+const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
+const logs = []; page.on('console', (m) => { if (m.type() === 'error') logs.push(m.text().slice(0, 300)); }); page.on('pageerror', (e) => logs.push('pageerror ' + e.message));
+await page.goto('file://' + path.join(root, 'dist/floor48.html') + '?test=1&w=960&h=540&q=medium&t=18.4&cam=-40,166.3,27.5,0.15,-0.03');
+await page.waitForFunction(() => window.__ready || window.__bootError, null, { timeout: 180000 });
+console.log('bootError:', await page.evaluate(() => window.__bootError || null));
+await page.evaluate(() => window.__game.step(5, 0.05));
+await page.screenshot({ path: '.scratch/dist.png', timeout: 120000 });
+console.log('errors:', logs.length ? logs : 'none');
+await browser.close();

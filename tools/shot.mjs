@@ -37,5 +37,5 @@ try {
 } catch (e) { logs.push('HARNESS ERROR: ' + e.message); }
 const seen = new Set(); const outl = [];
 for (const l of logs) { const k = l.slice(0, 160); if (seen.has(k)) continue; seen.add(k); outl.push(l.length > 1800 ? l.slice(0, 1800) + ' ...' : l); }
-console.log(outl.slice(0, 14).join('\n'));
+console.log(outl.slice(0, 60).join('\n'));
 await browser.close(); server.close();

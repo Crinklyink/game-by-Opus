@@ -59,6 +59,7 @@ async function boot() {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.NoToneMapping;
   renderer.setPixelRatio(1);
+  renderer.info.autoReset = false;
   G.renderer = renderer;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(74, 16 / 9, 0.08, 5000);
@@ -170,8 +171,9 @@ async function boot() {
   world.apt.setAllLights(G.time.hour < 7.2 || G.time.hour > 17.5);
   camera.position.set(-40, APT_Y + 1.5, 27);
 
-  function tick(dt) {
+  function tick(dt, render = true) {
     elapsed += dt; frames++;
+    renderer.info.reset();
     G.u.uTime.value = elapsed;
     if (started) { game.update(dt); player.update(dt); } else { setTitleCam(dt); G.time.hour = (G.time.hour + dt * 0.012) % 24; }
     camera.updateProjectionMatrix();
@@ -194,7 +196,7 @@ async function boot() {
       const want = (zn === 'apartment' || zn === 'balcony' || zn === 'hall') && probe && probe.env ? 'probe' : 'room';
       if (want !== envMode) { envMode = want; setInteriorEnv(want === 'probe' ? probe.env.texture : roomEnv); } }
     pool.update(dt, camera.position);
-    if (probe) probe.update(dt, inApt(), frames === 2);
+    if (probe && render) probe.update(dt, inApt(), frames === 2);
     if (started) { const h = player.hover; ui.setPrompt(h ? (typeof h.label === 'function' ? h.label() : h.label) : null); }
     if (audio.ready) {
       carInfo.length = 0;
@@ -205,6 +207,7 @@ async function boot() {
     glow.flush();
     const modal = started && ui.modalOpen;
     post.focus = damp(post.focus, clamp(player.hover ? player.hover.pos.distanceTo(camera.position) : 14, 1.2, 60), 4, dt);
+    if (!render) return;
     planar.update(scene, camera, streetMod.ROAD_Y, camera.position.y < 40 && G.u.uWet.value > 0.03 && (!game.zone || !game.zone.indoor));
     post.render(scene, camera, dt, elapsed, { glass: true, expMin: 0.24, expKey: 0.2, dof: !modal, dofScale: 0.8 });
     // dynamic resolution + fps overlay
@@ -258,7 +261,8 @@ async function boot() {
     lights: (v) => world.apt.setAllLights(v), start: (o = { fresh: true, lock: false }) => startGame(o),
     key: (code, down = true) => { player.keys[code] = down; },
     step: (n = 1, dt = 0.05) => { for (let i = 0; i < n; i++) tick(dt); return frames; },
-    frames: () => frames, info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, programs: renderer.info.programs?.length }),
+    simulate: (n = 1, dt = 0.05) => { for (let i = 0; i < n; i++) tick(dt, false); return frames; },
+    frames: () => frames, info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, programs: renderer.info.programs?.length, geoms: renderer.info.memory.geometries, tex: renderer.info.memory.textures }),
   };
   window.__ready = true;
   if (!TEST) requestAnimationFrame(frame);
