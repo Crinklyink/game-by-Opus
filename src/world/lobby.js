@@ -109,8 +109,8 @@ export function buildLobby(scene, ctx) {
   ck.box(M.walnut, 1.6, 0.05, 0.4, 0, 0.8, 0, { r: 0.006 }); for (const s of [-1, 1]) ck.box(M.blackMetal, 0.04, 0.8, 0.36, s * 0.75, 0, 0);
   F.finish(par, ck, -21.6 - 1.6, 0, Z1 - 0.3, Math.PI);
   // wall art
-  F.artwork(par, X1 - 0.18, 1.4, 27.5, -Math.PI / 2, 2.6, 1.7, 0, 'brass');
-  F.artwork(par, X0 + 0.16, 1.5, 29.5, Math.PI / 2, 2.2, 1.5, 2, 'black');
+  F.artwork(par, X1 - 0.18, 1.4, 27.5, -Math.PI / 2, 2.6, 1.7, 3, 'brass');
+  F.artwork(par, X0 + 0.16, 1.5, 29.5, Math.PI / 2, 2.2, 1.5, 5, 'black');
   // decorative closed elevators + fire door
   for (const x of [-30.0, -22.9]) { A.box(M.steel, 1.4, 2.4, 0.06, x, 0, Z1 - 0.06, { r: 0.004 }); A.box(M.blackMetal, 0.01, 2.3, 0.07, x, 0.05, Z1 - 0.06); }
   // chandelier: a cloud of glass orbs

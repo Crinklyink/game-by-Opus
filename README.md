@@ -45,6 +45,10 @@ If you have a laptop with two GPUs and it looks slow: make sure the browser is s
   distance from the windows, and real spot-light pools from the ceiling downlights.
 * **Far-field sun shadows.** A height map of the whole city is marched toward the sun, so towers throw long soft shadows
   across streets and rooftops at low sun angles (best at sunrise and sunset), plus screen-space light shafts on High/Ultra.
+* **Real mirrors.** The bathroom mirror, wardrobe doors, round dresser mirror, leaning mirror and the elevator's back wall are
+  planar mirrors: the nearest visible ones are re-rendered with a reflected camera every frame (Medium and above).
+* **People with a body under their clothes.** One continuous skinned mesh (finer where it matters, two detail levels by distance),
+  garments with thickness, creases at the knees / waist / elbows, volumetric hair, and a painted face (eyes, brows, lips, stubble / beards).
 * **Procedural materials with real relief:** plank floors with chamfers and wear, tiled walls with glazed bevels, plaster
   with roller marks, bark, weathered pavement (slab settlement, trench repairs, tar-sealed cracks), car paint with panel seams, clear glass.
 * **Detailed modelling:** piped upholstery, turned legs, shaker cabinets, tableware, split-leaf plants, diner booths and

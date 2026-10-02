@@ -64,34 +64,35 @@ export function buildDesk(par, y0, x, z, ry, ctx) {
   k.torus(M.plasticB, 0.09, 0.012, -1.3, top + 0.3, 0.05, { rx: 0, ry: 0, rz: 0 });
   for (const s of [-1, 1]) k.cyl(M.plasticB, 0.045, 0.045, 0.04, -1.3 + s * 0.09, top + 0.29, 0.05, { rz: Math.PI / 2, cy: true, seg: 16 });
   // mug, notebook, pen
-  k.lathe(M.ceramic, [[0, 0], [0.04, 0], [0.042, 0.09], [0.036, 0.09], [0.036, 0.005]], -0.75, top, 0.32);
-  k.box(M.paper, 0.2, 0.012, 0.28, 0.85, top, 0.3, { ry: -0.25, r: 0.003 });
-  k.box(M.rust, 0.205, 0.006, 0.285, 0.85, top, 0.3, { ry: -0.25 });
-  k.cyl(M.blackMetal, 0.005, 0.005, 0.14, 0.9, top + 0.013, 0.34, { rz: Math.PI / 2, ry: 0.4, cy: true, seg: 6 });
+  k.lathe(M.ceramic, [[0, 0], [0.04, 0], [0.042, 0.09], [0.036, 0.09], [0.036, 0.005]], -1.02, top, 0.3);
+  k.box(M.paper, 0.2, 0.012, 0.28, 1.06, top, 0.28, { ry: -0.25, r: 0.003 });
+  k.box(M.rust, 0.205, 0.006, 0.285, 1.06, top, 0.28, { ry: -0.25 });
+  k.cyl(M.blackMetal, 0.005, 0.005, 0.14, 1.1, top + 0.013, 0.32, { rz: Math.PI / 2, ry: 0.4, cy: true, seg: 6 });
   snakePlant(k, M, -1.25, top, -0.2, 11, 0.55);
-  // monitor arms + panels
-  const mw = 0.64, mh = 0.37;
-  const cfg = [{ x: -0.68, ry: 0.42, mode: 1, seed: 1 }, { x: 0, ry: 0, mode: 0, seed: 0 }, { x: 0.68, ry: -0.42, mode: 2, seed: 2 }];
+  // three monitors on an arc centred on the seated eye (R = 1.1 m, eye 1.05 m out from the desk centre), each on its own stand and
+  // tilted to face the eye; bottom edge 12 cm above the desk, centre a touch below eye height
+  const mw = 0.64, mh = 0.37, mt = 0.022, bez = 0.011, R = 1.1, eyeZ = 1.05;
   const g0 = new THREE.Group();
-  for (const c of cfg) {
-    // pole + arm + mount
-    k.cyl(M.blackMetal, 0.012, 0.012, 0.42, c.x * 0.6, top, -0.3, { seg: 8 });
-    k.box(M.blackMetal, 0.06, 0.03, 0.22, c.x, top + 0.34, -0.2, { ry: c.ry });
+  [{ phi: -0.575, mode: 1, seed: 1 }, { phi: 0, mode: 0, seed: 0 }, { phi: 0.575, mode: 2, seed: 2 }].forEach((c) => {
+    const px = R * Math.sin(c.phi), pz = eyeZ - R * Math.cos(c.phi), yaw = -c.phi;
     const local = new Kit();
-    local.box(M.plasticB, mw, mh, 0.018, 0, 0, 0, { r: 0.004 });
-    local.box(M.plasticB, 0.16, 0.012, 0.08, 0, -0.03 - 0.0, -0.04);
+    local.box(M.plasticB, mw, mh, mt, 0, 0, 0, { r: 0.006, seg: 3 });                                    // panel + bezel
+    local.box(M.blackMetal, mw * 0.55, mh * 0.62, 0.02, 0, -mh * 0.31, -mt * 0.5 - 0.008, { r: 0.008 });    // rear housing
+    local.box(M.blackMetal, 0.05, 0.19, 0.022, 0, -mh / 2 - 0.1, -0.035, { r: 0.004 });                    // neck
+    local.box(M.blackMetal, 0.3, 0.012, 0.2, 0, -mh / 2 - 0.12, -0.03, { r: 0.005 });                      // foot
+    local.box(M.chrome, 0.012, 0.012, 0.012, 0, -mh / 2 - 0.03, -mt / 2 - 0.0, {});                         // power LED
     const grp = new THREE.Group();
     local.mesh(grp, { occ: false });
     const scr = makeScreen(512, 300, drawChartScreen, { fps: 3 });
     scr.seed = c.seed; scr.mode = c.mode; scr.visible = true;
-    const pl = new THREE.Mesh(new THREE.PlaneGeometry(mw - 0.02, mh - 0.02), scr.mat);
-    pl.position.z = 0.0105;
+    const pl = new THREE.Mesh(new THREE.PlaneGeometry(mw - 2 * bez, mh - 2 * bez), scr.mat);
+    pl.position.z = mt / 2 + 0.0008;
     grp.add(pl);
-    grp.position.set(c.x, top + 0.14 + mh / 2, -0.12 + Math.abs(c.x) * -0.05);
-    grp.rotation.y = c.ry;
+    grp.position.set(px, top + 0.12 + mh / 2, pz);
+    grp.rotation.set(-0.05, yaw, 0, 'YXZ');
     g0.add(grp);
     out.screens.push(scr);
-  }
+  });
   const g = finish(par, k, x, y0, z, ry);
   g.add(kb); g.add(g0);
   colBox(x, z, W, D, ry, y0, y0 + 0.8);
@@ -154,14 +155,26 @@ export function buildBookshelf(par, y0, cx, z, W = 3.5, H = 3.15, ctx) {
   gk.sph(pm('plain', { color: 0x4a7a9b, rough: 0.5, interior: true }), 0.14, 0, 0.32, 0, { seg: 24, seg2: 16 });
   gk.torus(M.brass, 0.15, 0.006, 0, 0.32, 0, { rx: 0.3, rz: 0.4 });
   finish(par, gk, cx + 1.1, y0 + 2.945, z - 0.06, 0);
-  // rolling library ladder + rail
+  // rolling library ladder: a brass rail along the front of the top shelf, and an oak ladder hooked on it that leans back onto the shelves
   const lk = new Kit();
-  lk.tube(M.brass, [[-W / 2 + 0.05, 2.7, 0.05], [W / 2 - 0.05, 2.7, 0.05]], 0.012, { seg: 2, radial: 8 });
-  for (const s of [-1, 1]) {
-    lk.box(M.oak, 0.04, 2.8, 0.04, s * 0.22, 0, 0, { rx: 0.22, r: 0.006 });
+  const rz = D / 2 + 0.07, ry0 = 2.78;                                  // rail line (local; +z = into the room)
+  lk.strut(M.brass, [-W / 2 + 0.03, ry0, rz], [W / 2 - 0.03, ry0, rz], 0.011, 0.011, { seg: 8 });
+  for (const sx of [-1, 1]) lk.strut(M.brass, [sx * (W / 2 - 0.05), ry0, rz], [sx * (W / 2 - 0.05), ry0, D / 2], 0.009, 0.009, { seg: 6 });
+  for (const sx of [-W / 6, W / 6]) lk.strut(M.brass, [sx, ry0, rz], [sx, ry0, D / 2], 0.009, 0.009, { seg: 6 });
+  const lx = -0.7, foot = 0.62, half = 0.23;                            // ladder x position (local), foot distance out from the rail, half width
+  const top = [lx, ry0 - 0.04, rz], bot = [lx, 0.0, rz + foot];
+  for (const sx of [-1, 1]) {
+    lk.strut(M.oak, [top[0] + sx * half, top[1], top[2] - 0.02], [bot[0] + sx * half, bot[1] + 0.03, bot[2]], 0.019, 0.021, { seg: 8 });
+    lk.cyl(M.blackMetal, 0.03, 0.03, 0.025, bot[0] + sx * half, 0.03, bot[2] + 0.005, { rz: Math.PI / 2, cy: true, seg: 14 });          // castor wheels
+    lk.box(M.brass, 0.03, 0.09, 0.035, top[0] + sx * half, ry0 - 0.02, rz - 0.01, { r: 0.004 });                                       // hooks over the rail
+    lk.cyl(M.blackMetal, 0.02, 0.02, 0.012, top[0] + sx * half, ry0 + 0.0, rz + 0.025, { rx: Math.PI / 2, cy: true, seg: 12 });       // rail wheels
   }
-  for (let i = 0; i < 9; i++) lk.box(M.oak, 0.44, 0.03, 0.09, 0, 0.3 + i * 0.28, -0.06 - (0.28 * i) * 0.035 * 0 + 0.0, { r: 0.006 });
-  const lg = finish(par, lk, cx + 0.9, y0, z - 0.42, Math.PI);
+  const rungs = 9;
+  for (let i = 0; i < rungs; i++) {
+    const t = 0.1 + (i / (rungs - 1)) * 0.82, y = top[1] + (bot[1] - top[1]) * t, zz = top[2] - 0.02 + (bot[2] - top[2] + 0.02) * t;
+    lk.strut(M.oak, [lx - half, y, zz], [lx + half, y, zz], 0.014, 0.014, { seg: 8 });
+  }
+  finish(par, lk, cx, y0, z, Math.PI);
   colBox(cx, z - 0.15, W, 0.4, 0, y0, y0 + H);
   return { group: g, pos: new THREE.Vector3(cx, y0 + 1.5, z - 0.5) };
 }

@@ -80,7 +80,7 @@ export class Player {
 
   interact() {
     if (this.lock > 0 && !this.sit) return;
-    if (this.sit) { this.standUp(); return; }
+    if (this.sit) { if (this.sit.onUse) this.sit.onUse(); else this.standUp(); return; }
     if (this.hover) { this.hover.act?.(); this.onInteract?.(this.hover); }
   }
 
@@ -194,6 +194,6 @@ export class Player {
     // ---- interaction pick ----
     _fwd.set(0, 0, -1).applyQuaternion(cam.quaternion);
     this.hover = (this.lock > 0 && !this.sit) || modal ? null : Interact.pick(cam.position, _fwd);
-    if (this.sit && !modal) this.hover = { label: () => 'Stand up', act: () => this.standUp() , isStand: true };
+    if (this.sit && !modal) this.hover = this.sit.onUse ? { label: () => `${this.sit?.useLabel || 'Use'}  ·  move to stand up`, act: () => this.sit.onUse(), isStand: true } : { label: () => 'Stand up', act: () => this.standUp(), isStand: true };
   }
 }

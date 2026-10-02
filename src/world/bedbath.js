@@ -4,8 +4,9 @@ import { Kit, mat4, leafGeometry } from './kit.js';
 import { palette } from './palette.js';
 import { pm } from '../gfx/materials.js';
 import { rng } from '../core/util.js';
+import { G } from '../core/G.js';
 import { finish, colBox, armchair, tableLamp, floorLamp, artwork, sideTable, snakePlant, trailingPlant } from './furniture.js';
-import { cushion, throwPillow, pullBar, knob, bookStack, mug, branchVase, flutes, slats, turnedLeg, shakerDoor, slabDoor } from './shapes.js';
+import { cushion, throwPillow, leanPillow, pullBar, knob, bookStack, mug, branchVase, flutes, slats, turnedLeg, shakerDoor, slabDoor } from './shapes.js';
 
 const cover = (c) => pm('paint', { color: c, rough: 0.55, interior: true });
 
@@ -34,13 +35,14 @@ export function buildBed(par, y0, x, z) {
   // turned-back top sheet (crisp white band) + folded knit throw at the foot
   cushion(k, M.white, 1.94, 0.028, 0.5, 0, 0.545, -0.34, { r: 0.012, crown: 0.01, seg: 4, rx: -0.02 });
   cushion(k, M.charcoal, 1.86, 0.06, 0.44, 0, 0.545, 0.7, { r: 0.028, crown: 0.014, pipe: M.charcoal, seg: 4 });
-  // pillows: two sleepers, two upright euros, two accents and a lumbar
+  // pillows: euros stand against the headboard, sleepers lean on them, accents + a lumbar in front (every one rests on the mattress or the pillow behind it)
+  const PY = 0.54;                                         // mattress / sheet surface
   for (const px of [-0.46, 0.46]) {
-    throwPillow(k, M.white, 0.7, 0.17, 0.48, px, 0.56, -0.86, { rx: -0.22, e: 0.55, ry: px * 0.05 });
-    throwPillow(k, M.linen, 0.62, 0.16, 0.62, px * 1.02, 0.66, -1.0, { rx: -1.15, e: 0.6 });
+    leanPillow(k, M.linen, 0.62, 0.15, 0.62, px, -0.923, PY, 1.1, { e: 0.6 });
+    leanPillow(k, M.white, 0.72, 0.17, 0.5, px * 1.02, -0.52, PY, 0.45, { e: 0.55, ry: px * 0.04 });
   }
-  for (const [px, m, ry] of [[-0.38, M.sage, 0.3], [0.42, M.rust, -0.3]]) throwPillow(k, m, 0.5, 0.13, 0.36, px, 0.68, -0.76, { rx: -0.7, ry, e: 0.6 });
-  throwPillow(k, M.mustard, 0.62, 0.12, 0.24, 0.0, 0.72, -0.66, { rx: -0.42, e: 0.6 });
+  for (const [px, m, ry] of [[-0.36, M.sage, 0.25], [0.4, M.rust, -0.25]]) leanPillow(k, m, 0.46, 0.12, 0.34, px, -0.40, PY, 0.6, { ry, e: 0.6 });
+  leanPillow(k, M.mustard, 0.56, 0.11, 0.24, 0.02, -0.25, PY, 0.35, { e: 0.6 });
   // nightstands (floating) with drawer, open shelf, lamps and things
   const rr = rng(404);
   for (const s of [-1, 1]) {
@@ -88,7 +90,9 @@ export function buildDresser(par, y0, x, z, ry) {
   const mm = pm('plain', { color: 0xdfe6ea, metal: 1, rough: 0.02, interior: true });
   k.torus(M.brass, 0.42, 0.014, 0, 1.55, -0.222, { rx: 0, seg: 64, seg2: 8 });
   k.torus(M.brass, 0.405, 0.005, 0, 1.55, -0.212, { rx: 0, seg: 64, seg2: 5 });
-  k.cyl(mm, 0.41, 0.41, 0.006, 0, 1.55, -0.222, { rx: Math.PI / 2, cy: true, seg: 64 });
+  // the glass is a real planar mirror (src/gfx/mirrors.js); world transform of the dresser's local frame:
+  { const c = Math.cos(ry), sn = Math.sin(ry), lz = -0.213;
+    G.mirrors?.add(par, { name: 'dresser', pos: [x + lz * sn, y0 + 1.55, z + lz * c], normal: [sn, 0, c], quads: [{ w: 0.82, h: 0.82, round: true }], res: 640, room: { x0: -49.2, x1: -41.8, z0: 20.3, z1: 29.1, y0: y0 - 1, y1: y0 + 3.8 } }); }
   // tray with perfumes, jewellery box, framed photo, small plant
   k.box(M.marbleD, 0.34, 0.015, 0.22, -0.4, 0.82, 0.0, { r: 0.004 });
   k.box(M.brass, 0.35, 0.02, 0.005, -0.4, 0.83, 0.11);
@@ -115,7 +119,7 @@ export function buildWardrobe(par, y0, x, z, ry, W = 2.9) {
   k.box(M.walnut, W + 0.05, 0.05, D + 0.03, 0, H, 0, { r: 0.006 });                       // cornice
   k.box(M.blackMetal, W - 0.02, 0.06, D - 0.04, 0, -0.0, 0.0);                             // toe-kick shadow
   const n = 3, dw = W / n;
-  const mirror = pm('plain', { color: 0xc8d0d4, metal: 1, rough: 0.03, interior: true });
+  const mirrorPanels = [];
   for (let i = 0; i < n; i++) {
     const cx = (i - 1) * dw, oz = D / 2 + 0.006 + (i % 2) * 0.022;
     k.box(M.blackMetal, dw - 0.008, H - 0.06, 0.02, cx, 0.03, oz);
@@ -123,26 +127,30 @@ export function buildWardrobe(par, y0, x, z, ry, W = 2.9) {
       k.box(M.oakV, dw - 0.09, H - 0.15, 0.006, cx, 0.075, oz + 0.013);
       for (let j = 0; j < 4; j++) k.box(M.walnut, 0.006, H - 0.15, 0.008, cx - dw / 2 + 0.09 + j * ((dw - 0.18) / 3), 0.075, oz + 0.018);
     } else {
-      k.box(mirror, dw - 0.09, H - 0.15, 0.004, cx, 0.075, oz + 0.013);
+      mirrorPanels.push({ dx: cx, w: dw - 0.09, lz: oz + 0.0185 });
       k.box(M.blackMetal, dw - 0.06, 0.02, 0.008, cx, 0.06, oz + 0.014); k.box(M.blackMetal, dw - 0.06, 0.02, 0.008, cx, H - 0.09, oz + 0.014);
     }
     pullBar(k, M.brass, cx + (i === 1 ? -0.16 : 0.2), 0.9, oz + 0.004, 0.42, true);
   }
   const g = finish(par, k, x, y0, z, ry);
+  if (mirrorPanels.length) {                                   // both mirrored doors lie in one plane -> one reflection
+    const c = Math.cos(ry), sn = Math.sin(ry), lz = mirrorPanels[0].lz;
+    G.mirrors?.add(par, { name: 'wardrobe', pos: [x + lz * sn, y0 + 0.075 + (H - 0.15) / 2, z + lz * c], normal: [sn, 0, c], quads: mirrorPanels.map((p) => ({ dx: p.dx, w: p.w, h: H - 0.15 })), res: 1024, room: { x0: -49.2, x1: -41.8, z0: 20.3, z1: 29.1, y0: y0 - 1, y1: y0 + 3.8 } });
+  }
   colBox(x, z, W, D, ry, y0, y0 + H);
   return g;
 }
 
 export function buildReadingCorner(par, y0, x, z) {
   const M = palette();
-  armchair(par, y0, x, z, Math.PI * 0.72, M.charcoal);
+  armchair(par, y0, x, z, -Math.PI * 0.28, M.charcoal);          // faces out of the corner into the room
   const lamp = floorLamp(par, y0, x + 0.85, z - 0.6, Math.PI);
   const k = new Kit();
-  sideTable(par, y0, x - 0.3, z + 0.85);
+  sideTable(par, y0, x - 0.55, z - 0.5);
   // throw + book on the armchair
   const kk = new Kit();
   kk.cloth(M.rust, 0.5, 0.7, 0, 0, 0, (u, v) => 0.012 * Math.sin(u * 16) + (v > 0.55 ? -Math.pow((v - 0.55) / 0.45, 1.5) * 0.3 : 0), { sw: 20, sh: 26 });
-  finish(par, kk, x + 0.12, y0 + 0.5, z + 0.14, Math.PI * 0.72 + 0.1);
+  finish(par, kk, x - 0.1, y0 + 0.5, z - 0.12, -Math.PI * 0.28 + 0.1);
   return { lamp };
 }
 
@@ -154,7 +162,9 @@ export function buildBathroom(par, y0, ctx) {
   // wall tiles: 0.01 skin in front of plaster (west wall x=-49, south wall z=32.4, and the north partition z=29 back face)
   k.box(M.tileBath, 0.012, 2.5, 3.35, -48.994, 0, 30.72);            // west
   k.box(M.tileBath, 6.95, 2.5, 0.012, -45.5, 0, 32.394);            // south
-  k.box(M.tileBath, 6.95, 2.5, 0.012, -45.5, 0, 29.13);             // north partition (bath side)
+  k.box(M.tileBath, 3.675, 2.5, 0.012, -47.1375, 0, 29.13);         // north partition (bath side), cut around the door opening (x -45.3..-44.2, 2.4 high)
+  k.box(M.tileBath, 2.175, 2.5, 0.012, -43.1125, 0, 29.13);
+  k.box(M.tileBath, 1.1, 0.1, 0.012, -44.75, 2.4, 29.13);
   k.box(M.tileDark, 0.012, 2.5, 3.35, -42.13, 0, 30.72);           // east partition (bath side) dark accent
   k.box(M.marbleW, 6.95, 0.03, 0.03, -45.5, 2.5, 32.38);           // tile-top ledge
   k.box(M.tileDark, 6.95, 0.02, 3.3, -45.5, 0, 30.75);             // floor
@@ -196,7 +206,8 @@ export function buildBathroom(par, y0, ctx) {
     k.box(M.brass, 0.02, 0.02, 0.05, bx + 0.05, 0.98, 32.32, { ry: 0.5 });
   }
   // mirror with backlight, a shelf, wall lights
-  k.box(pm('plain', { color: 0xdfe6ea, metal: 1, rough: 0.025, interior: true }), 2.6, 1.1, 0.012, -44.7, 1.25, 32.385);
+  G.mirrors?.add(par, { name: 'bath', pos: [-44.7, y0 + 1.8, 32.374], normal: [0, 0, -1], quads: [{ w: 2.6, h: 1.1 }], res: 1280, room: { x0: -49.2, x1: -41.8, z0: 27.5, z1: 32.4, y0: y0 - 1, y1: y0 + 3.8 } });
+  k.box(M.blackMetal, 2.6, 1.1, 0.01, -44.7, 1.25, 32.388);                                  // backing behind the glass
   k.box(M.brass, 2.66, 0.012, 0.014, -44.7, 2.35, 32.383); k.box(M.brass, 2.66, 0.012, 0.014, -44.7, 1.2, 32.383);
   k.box(M.ledCool, 2.62, 0.016, 0.01, -44.7, 2.36, 32.38);
   k.box(M.ledCool, 2.62, 0.016, 0.01, -44.7, 1.205, 32.38);

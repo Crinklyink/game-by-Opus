@@ -12,6 +12,7 @@ import { LightPool } from './gfx/lights.js';
 import { initSdfUniforms, bakeSdf, activateSdf, SDF } from './gfx/sdf.js';
 import { initFarShadow, bakeHeights, FAR } from './gfx/farshadow.js';
 import { PlanarReflection } from './gfx/planar.js';
+import { MirrorSystem } from './gfx/mirrors.js';
 import { InteriorProbe } from './gfx/probe.js';
 import { setInteriorEnv } from './gfx/materials.js';
 import * as city from './world/city.js';
@@ -76,6 +77,7 @@ async function boot() {
   const atmo = new Atmosphere(renderer, scene, q); G.atmo = atmo;
   const post = new PostFX(renderer, q); G.post = post;
   const planar = new PlanarReflection(renderer, q); G.planar = planar;
+  const mirrors = new MirrorSystem(renderer, q);                       // real planar mirrors (bathroom, wardrobe, elevator...)
   const glow = new GlowField(6144); G.glow = glow; scene.add(glow.mesh);
   initSdfUniforms(); initFarShadow();
   const pool = new LightPool(scene, q.lights, q.spots || 0); G.pool = pool;
@@ -235,8 +237,11 @@ async function boot() {
     }
     glow.flush();
     const modal = started && ui.modalOpen;
-    post.focus = damp(post.focus, clamp(player.hover ? player.hover.pos.distanceTo(camera.position) : 14, 1.2, 60), 4, dt);
+    const hoverPos = player.hover && player.hover.pos;                                  // the 'Stand up' prompt has no position
+    const focusD = player.sit ? (player.sit.focus ?? 2.2) : hoverPos ? hoverPos.distanceTo(camera.position) : 14;
+    post.focus = damp(post.focus, clamp(focusD, 1.2, 60), 4, dt);
     if (!render) return;
+    mirrors.update(scene, camera);
     planar.update(scene, camera, streetMod.ROAD_Y, camera.position.y < 40 && G.u.uWet.value > 0.03 && (!game.zone || !game.zone.indoor));
     const zn0 = game.zone ? game.zone.name : 'apartment';
     const expKey = 0.2 * (1 - ((zn0 === 'street' || zn0 === 'park') ? 0.5 : 0.45) * atmo.night);      // nights stay dark instead of being normalised to daylight
@@ -257,8 +262,8 @@ async function boot() {
   }
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
-    tick(dt);
     requestAnimationFrame(frame);
+    try { tick(dt); } catch (e) { if (!frame.warned) { frame.warned = true; console.error('[floor48] frame error', e); } }
   }
 
   // ---------------------------------------------------------------- start / title

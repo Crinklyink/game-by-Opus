@@ -3,7 +3,7 @@
 // returns handles. Dimensions are in metres and roughly match real products.
 import * as THREE from 'three';
 import { Kit, addCollider, leafGeometry, mat4 } from './kit.js';
-import { cushion, throwPillow, turnedLeg, rrShape, rrPath, bookStack, mug, plate, stemGlass, branchVase, throwHeight, slats, flutes } from './shapes.js';
+import { cushion, throwPillow, leanPillow, turnedLeg, rrShape, rrPath, bookStack, mug, plate, stemGlass, branchVase, throwHeight, slats, flutes } from './shapes.js';
 import { palette } from './palette.js';
 import { canvasTex } from '../gfx/noise.js';
 import { pm } from '../gfx/materials.js';
@@ -52,9 +52,10 @@ export function sofa(par, y0, x, z, ry, o = {}) {
     cushion(k, body, cw - 0.03, 0.42, 0.17, cx, 0.4, -0.27, { rx: -0.3, r: 0.06, crown: 0.03, pipe: body, buttons: [1, 1] });
   }
   // throw pillows + folded knit blanket
-  throwPillow(k, M.rust, 0.5, 0.15, 0.5, -W / 2 + 0.55, 0.36, 0.05, { rx: -0.5, ry: 0.4 });
-  throwPillow(k, M.sage, 0.42, 0.13, 0.42, -W / 2 + 0.82, 0.37, 0.14, { rx: -0.42, ry: -0.3 });
-  throwPillow(k, M.navy, 0.5, 0.14, 0.5, W / 2 - 0.55, 0.36, 0.05, { rx: -0.5, ry: -0.35 });
+  const SY = 0.5 + 0.0;                                                  // seat cushion top
+  leanPillow(k, M.rust, 0.5, 0.15, 0.5, -W / 2 + 0.55, 0.14, SY, 0.5, { ry: 0.4 });
+  leanPillow(k, M.sage, 0.42, 0.13, 0.42, -W / 2 + 0.9, 0.3, SY, 0.4, { ry: -0.3 });
+  leanPillow(k, M.navy, 0.5, 0.14, 0.5, W / 2 - 0.55, 0.14, SY, 0.5, { ry: -0.35 });
   k.cloth(M.mustard, 0.6, 0.85, W / 2 - 1.05, 0.5, 0.04, throwHeight(2), { sw: 28, sh: 34, ry: 0.1 });
   const g = finish(par, k, x, y0, z, ry);
   colBox(x, z, W, D, ry, y0, y0 + 0.9);
@@ -325,43 +326,155 @@ export function tableLamp(k, M, x, y, z, shadeMat) {
 }
 
 // ------------------------------------------------------------------ art
+// Procedural paintings: layered gradients + directional brush strokes + canvas weave, so they read as real art up close.
+const hsl = (h, s, l, a = 1) => `hsla(${h},${s}%,${l}%,${a})`;
+function strokes(ctx, R, n, colorAt, o = {}) {
+  const { len = 40, wid = 9, angAt = () => 0, alpha = [0.35, 0.8], region = null } = o;
+  ctx.lineCap = 'round';
+  for (let i = 0; i < n; i++) {
+    const x = R() * ctx.canvas.width, y = R() * ctx.canvas.height;
+    if (region && !region(x, y)) continue;
+    const a = angAt(x, y) + (R() - 0.5) * 0.35, l = len * (0.5 + R()), w = wid * (0.5 + R() * 0.9);
+    ctx.strokeStyle = colorAt(x, y, R); ctx.globalAlpha = alpha[0] + R() * (alpha[1] - alpha[0]); ctx.lineWidth = w;
+    ctx.beginPath(); ctx.moveTo(x - Math.cos(a) * l / 2, y - Math.sin(a) * l / 2);
+    ctx.quadraticCurveTo(x + Math.sin(a) * w * 0.6, y - Math.cos(a) * w * 0.6, x + Math.cos(a) * l / 2, y + Math.sin(a) * l / 2); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+const mountains = (ctx, cw, base, amp, rough, seed) => {
+  ctx.beginPath(); ctx.moveTo(0, base + 400);
+  for (let x = 0; x <= cw; x += 6) {
+    const y = Math.sin(x * 0.006 + seed) * amp + Math.sin(x * 0.017 + seed * 2.3) * amp * 0.45 + Math.sin(x * 0.05 + seed * 5) * rough;
+    ctx.lineTo(x, base - Math.abs(y));
+  }
+  ctx.lineTo(cw, base + 400); ctx.closePath();
+};
+
 function paintingTexture(kind, w, h) {
-  return canvasTex(512, Math.round(512 * h / w), (ctx, cw, ch) => {
+  return canvasTex(1024, Math.round(1024 * h / w), (ctx, cw, ch) => {
     const R = rng(kind * 911 + 7);
-    if (kind === 0) {                 // sunset abstract
-      const g = ctx.createLinearGradient(0, 0, 0, ch);
-      g.addColorStop(0, '#1f2d4d'); g.addColorStop(0.55, '#d1683b'); g.addColorStop(1, '#f2b45a');
+    if (kind === 0) {                 // harbour at sunset
+      const g = ctx.createLinearGradient(0, 0, 0, ch * 0.62);
+      g.addColorStop(0, '#24325a'); g.addColorStop(0.35, '#6b4a7a'); g.addColorStop(0.7, '#e0714a'); g.addColorStop(1, '#f7c06a');
       ctx.fillStyle = g; ctx.fillRect(0, 0, cw, ch);
-      ctx.fillStyle = '#f7e0a0'; ctx.beginPath(); ctx.arc(cw * 0.62, ch * 0.52, ch * 0.16, 0, 7); ctx.fill();
-      for (let i = 0; i < 4; i++) { ctx.fillStyle = `rgba(20,20,35,${0.5 + i * 0.12})`; ctx.beginPath(); ctx.moveTo(0, ch * (0.62 + i * 0.1)); for (let x = 0; x <= cw; x += 16) ctx.lineTo(x, ch * (0.6 + i * 0.1) + Math.sin(x * 0.02 + i * 2) * 14 + R() * 4); ctx.lineTo(cw, ch); ctx.lineTo(0, ch); ctx.fill(); }
-    } else if (kind === 1) {          // geometric
-      ctx.fillStyle = '#efe6d4'; ctx.fillRect(0, 0, cw, ch);
-      const cols = ['#c4633a', '#2f4858', '#e2b04a', '#7d8f69', '#1b1b1d'];
-      for (let i = 0; i < 9; i++) { ctx.fillStyle = cols[i % cols.length]; const x = R() * cw * 0.8, y = R() * ch * 0.8, s = 40 + R() * 150; if (i % 2) { ctx.beginPath(); ctx.arc(x + s / 2, y + s / 2, s / 2, 0, 7); ctx.fill(); } else ctx.fillRect(x, y, s, s * (0.5 + R())); }
-    } else {                          // line art / topography
-      ctx.fillStyle = '#16232e'; ctx.fillRect(0, 0, cw, ch);
-      for (let j = 0; j < 26; j++) { ctx.strokeStyle = `hsl(${170 + j * 3} 40% ${35 + j}%)`; ctx.lineWidth = 2; ctx.beginPath(); for (let x = 0; x <= cw; x += 8) { const y = ch * 0.08 + j * ch * 0.034 + Math.sin(x * 0.014 + j * 0.5) * 18 + Math.sin(x * 0.04 + j) * 6; x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } ctx.stroke(); }
+      const sx = cw * 0.64, sy = ch * 0.5;
+      const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, ch * 0.5); glow.addColorStop(0, 'rgba(255,238,190,0.95)'); glow.addColorStop(0.25, 'rgba(255,200,130,0.5)'); glow.addColorStop(1, 'rgba(255,160,90,0)');
+      ctx.fillStyle = glow; ctx.fillRect(0, 0, cw, ch);
+      ctx.fillStyle = '#fff2c8'; ctx.beginPath(); ctx.arc(sx, sy, ch * 0.065, 0, 7); ctx.fill();
+      strokes(ctx, R, 900, (x, y) => hsl(18 + (y / ch) * 30 + R() * 14, 70, 55 + R() * 22), { len: 120, wid: 14, alpha: [0.12, 0.35], region: (x, y) => y < ch * 0.58 });
+      ctx.fillStyle = '#2b2440'; mountains(ctx, cw, ch * 0.585, 18, 5, 1.7); ctx.fill();
+      const sea = ctx.createLinearGradient(0, ch * 0.58, 0, ch); sea.addColorStop(0, '#d9824f'); sea.addColorStop(0.18, '#7d5a73'); sea.addColorStop(1, '#1c2542');
+      ctx.fillStyle = sea; ctx.fillRect(0, ch * 0.58, cw, ch * 0.42);
+      strokes(ctx, R, 1400, (x, y) => (Math.abs(x - sx) < 70 + (y - ch * 0.58) * 0.25 && R() < 0.8) ? hsl(34 + R() * 10, 90, 62 + R() * 22) : hsl(236 + R() * 20, 35, 22 + (1 - (y - ch * 0.58) / (ch * 0.42)) * 24 + R() * 10), { len: 70, wid: 6, alpha: [0.25, 0.75], region: (x, y) => y > ch * 0.585 });
+      ctx.fillStyle = '#17142a';                                            // sailboat
+      ctx.beginPath(); ctx.moveTo(cw * 0.3, ch * 0.76); ctx.lineTo(cw * 0.42, ch * 0.76); ctx.lineTo(cw * 0.405, ch * 0.79); ctx.lineTo(cw * 0.315, ch * 0.79); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(cw * 0.365, ch * 0.755); ctx.lineTo(cw * 0.365, ch * 0.6); ctx.lineTo(cw * 0.41, ch * 0.75); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(cw * 0.355, ch * 0.755); ctx.lineTo(cw * 0.355, ch * 0.64); ctx.lineTo(cw * 0.32, ch * 0.75); ctx.fill();
+    } else if (kind === 1) {          // mid-century geometry on warm paper
+      ctx.fillStyle = '#efe4cf'; ctx.fillRect(0, 0, cw, ch);
+      const cols = ['#c4633a', '#2f4858', '#e2b04a', '#7d8f69', '#1b1b1d', '#d99a8c'];
+      const shapes = [];
+      for (let i = 0; i < 9; i++) shapes.push({ c: cols[i % cols.length], x: R() * cw * 0.75 + cw * 0.05, y: R() * ch * 0.7 + ch * 0.05, s: cw * (0.1 + R() * 0.2), t: i % 3 });
+      for (const s of shapes) {
+        ctx.fillStyle = 'rgba(40,30,20,0.18)'; ctx.beginPath();
+        if (s.t === 0) ctx.arc(s.x + s.s / 2 + 5, s.y + s.s / 2 + 6, s.s / 2, 0, 7); else if (s.t === 1) ctx.rect(s.x + 5, s.y + 6, s.s, s.s * 0.7); else ctx.arc(s.x + s.s / 2 + 5, s.y + s.s / 2 + 6, s.s / 2, Math.PI, 0);
+        ctx.fill(); ctx.fillStyle = s.c; ctx.beginPath();
+        if (s.t === 0) ctx.arc(s.x + s.s / 2, s.y + s.s / 2, s.s / 2, 0, 7); else if (s.t === 1) ctx.rect(s.x, s.y, s.s, s.s * 0.7); else ctx.arc(s.x + s.s / 2, s.y + s.s / 2, s.s / 2, Math.PI, 0);
+        ctx.fill();
+      }
+      ctx.strokeStyle = '#1b1b1d'; ctx.lineWidth = 5;
+      for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(R() * cw, R() * ch); ctx.lineTo(R() * cw, R() * ch); ctx.stroke(); }
+      strokes(ctx, R, 500, () => 'rgba(120,90,60,1)', { len: 30, wid: 2, alpha: [0.03, 0.08] });
+    } else if (kind === 2) {          // flowing topography
+      const g = ctx.createLinearGradient(0, 0, cw, ch); g.addColorStop(0, '#0f1d28'); g.addColorStop(1, '#1d3544');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, cw, ch);
+      for (let j = 0; j < 34; j++) {
+        ctx.strokeStyle = j === 17 ? '#e5b660' : `hsl(${168 + j * 2.2} 42% ${30 + j * 1.2}%)`; ctx.lineWidth = j === 17 ? 5 : 2.6; ctx.beginPath();
+        for (let x = 0; x <= cw; x += 8) { const y = ch * 0.05 + j * ch * 0.027 + Math.sin(x * 0.007 + j * 0.45) * 38 + Math.sin(x * 0.019 + j * 0.9) * 13 + Math.sin(x * 0.0026 + j * 0.1) * 60; x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+        ctx.stroke();
+      }
+    } else if (kind === 3) {          // alpine lake
+      const g = ctx.createLinearGradient(0, 0, 0, ch * 0.55); g.addColorStop(0, '#a9c4de'); g.addColorStop(1, '#f2e4d0');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, cw, ch);
+      strokes(ctx, R, 500, () => hsl(30 + R() * 20, 50, 85 + R() * 10), { len: 160, wid: 18, alpha: [0.2, 0.5], region: (x, y) => y < ch * 0.4 });
+      [[0.42, '#8a9fc0', 70, 4], [0.5, '#5f7ba3', 55, 6], [0.58, '#3d5a7d', 44, 8]].forEach(([b, c, a, r], i) => { ctx.fillStyle = c; mountains(ctx, cw, ch * b, a, r, 2 + i * 1.9); ctx.fill(); });
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      for (let i = 0; i < 18; i++) { const x = R() * cw, y = ch * (0.3 + R() * 0.14); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 22, y + 36); ctx.lineTo(x + 22, y + 36); ctx.fill(); }
+      const mist = ctx.createLinearGradient(0, ch * 0.5, 0, ch * 0.64); mist.addColorStop(0, 'rgba(240,235,225,0)'); mist.addColorStop(0.6, 'rgba(240,235,225,0.75)'); mist.addColorStop(1, 'rgba(240,235,225,0)');
+      ctx.fillStyle = mist; ctx.fillRect(0, ch * 0.5, cw, ch * 0.14);
+      const lake = ctx.createLinearGradient(0, ch * 0.62, 0, ch); lake.addColorStop(0, '#5d7ea2'); lake.addColorStop(1, '#1f3550');
+      ctx.fillStyle = lake; ctx.fillRect(0, ch * 0.62, cw, ch * 0.38);
+      strokes(ctx, R, 900, (x, y) => hsl(212 + R() * 14, 38, 38 + (1 - (y / ch)) * 38 + R() * 10), { len: 90, wid: 5, alpha: [0.2, 0.55], region: (x, y) => y > ch * 0.63 });
+      ctx.fillStyle = '#16251f';                                            // pines
+      for (let i = 0; i < 26; i++) {
+        const x = (i / 25) * cw + (R() - 0.5) * 30, hh = ch * (0.13 + R() * 0.16), by = ch * 0.69 + R() * 6;
+        for (let t = 0; t < 4; t++) { const ww = hh * (0.18 + t * 0.07), yy = by - hh + t * hh * 0.27; ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x - ww, yy + hh * 0.36); ctx.lineTo(x + ww, yy + hh * 0.36); ctx.fill(); }
+      }
+      ctx.fillRect(0, ch * 0.69, cw, ch * 0.02);
+    } else if (kind === 4) {          // botanical print
+      ctx.fillStyle = '#f0e8d6'; ctx.fillRect(0, 0, cw, ch);
+      strokes(ctx, R, 700, () => 'rgba(150,120,80,1)', { len: 50, wid: 2, alpha: [0.03, 0.09] });
+      const leaf = (x, y, s, ang, c1, c2) => {
+        ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+        const g = ctx.createLinearGradient(-s * 0.5, 0, s * 0.5, 0); g.addColorStop(0, c1); g.addColorStop(1, c2); ctx.fillStyle = g;
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.bezierCurveTo(-s * 0.7, -s * 0.15, -s * 0.8, -s * 0.8, 0, -s); ctx.bezierCurveTo(s * 0.8, -s * 0.8, s * 0.7, -s * 0.15, 0, 0); ctx.fill();
+        ctx.strokeStyle = 'rgba(240,232,214,1)'; ctx.lineCap = 'round';                               // monstera slits painted in the paper colour
+        for (let i = 0; i < 5; i++) { const yy = -s * (0.22 + i * 0.14); for (const sd of [-1, 1]) { ctx.lineWidth = s * 0.04; ctx.beginPath(); ctx.moveTo(sd * s * 0.62 * (1 - Math.abs(yy / s + 0.5) * 0.5), yy - s * 0.05); ctx.lineTo(sd * s * 0.1, yy); ctx.stroke(); } }
+        ctx.strokeStyle = 'rgba(235,245,205,0.7)'; ctx.lineWidth = s * 0.014; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -s * 0.96); ctx.stroke();
+        ctx.restore();
+      };
+      leaf(cw * 0.34, ch * 0.96, ch * 0.78, -0.18, '#2c5d3a', '#4f8a54'); leaf(cw * 0.66, ch * 0.98, ch * 0.62, 0.3, '#21492f', '#3d7a48'); leaf(cw * 0.5, ch * 0.98, ch * 0.45, 0.05, '#4f8a54', '#78ad69');
+      ctx.fillStyle = '#d9a35c'; ctx.beginPath(); ctx.arc(cw * 0.78, ch * 0.2, ch * 0.09, 0, 7); ctx.fill();
+    } else {                          // city at night
+      const g = ctx.createLinearGradient(0, 0, 0, ch); g.addColorStop(0, '#171a3a'); g.addColorStop(0.6, '#5a3a6e'); g.addColorStop(1, '#e58a6a');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, cw, ch);
+      for (let i = 0; i < 110; i++) { ctx.fillStyle = `rgba(255,255,240,${0.2 + R() * 0.7})`; ctx.fillRect(R() * cw, R() * ch * 0.45, 2, 2); }
+      ctx.fillStyle = '#f4ecd2'; ctx.beginPath(); ctx.arc(cw * 0.78, ch * 0.2, ch * 0.07, 0, 7); ctx.fill();
+      for (let layer = 0; layer < 3; layer++) {
+        const shade = ['#3b2d55', '#261c3d', '#120d22'][layer]; let x = -10;
+        while (x < cw) {
+          const bw = 40 + R() * 80, bh = ch * (0.25 + R() * 0.3 - layer * 0.05), by = ch - bh - layer * 14 + 40;
+          ctx.fillStyle = shade; ctx.fillRect(x, by, bw, ch - by);
+          if (layer > 0) for (let wy = by + 14; wy < ch - 30; wy += 16) for (let wx = x + 8; wx < x + bw - 10; wx += 14) if (R() < 0.38) { ctx.fillStyle = R() < 0.7 ? '#ffd88a' : '#9fd6ff'; ctx.fillRect(wx, wy, 6, 8); }
+          x += bw + R() * 6;
+        }
+      }
     }
     // canvas weave + vignette
-    ctx.fillStyle = 'rgba(0,0,0,0.05)'; for (let y = 0; y < ch; y += 3) ctx.fillRect(0, y, cw, 1);
-  });
+    ctx.globalAlpha = 0.06; ctx.fillStyle = '#000';
+    for (let y = 0; y < ch; y += 4) ctx.fillRect(0, y, cw, 1);
+    for (let x = 0; x < cw; x += 4) ctx.fillRect(x, 0, 1, ch);
+    ctx.globalAlpha = 1;
+    const v = ctx.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * 0.35, cw / 2, ch / 2, Math.max(cw, ch) * 0.75); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.22)');
+    ctx.fillStyle = v; ctx.fillRect(0, 0, cw, ch);
+  }, { aniso: 8 });
 }
 
+// Framed picture: stepped frame profile, a mat board for the print styles, and a lightly varnished canvas.
+// (x, y) = bottom-centre on the wall, front faces local +z; w x h is the picture opening (the frame adds 4.5 cm around it).
 export function artwork(par, x, y, z, ry, w, h, kind, frame = 'walnut') {
   const M = palette(), k = new Kit();
   const fm = frame === 'brass' ? M.brass : frame === 'black' ? M.blackMetal : M.walnut;
-  const t = 0.035;
-  k.box(fm, w + 0.06, 0.03, t, 0, -0.03, 0);
-  k.box(fm, w + 0.06, 0.03, t, 0, h, 0);
-  k.box(fm, 0.03, h + 0.06, t, -w / 2 - 0.015, -0.03, 0);
-  k.box(fm, 0.03, h + 0.06, t, w / 2 + 0.015, -0.03, 0);
-  k.box(M.blackMetal, w, h, 0.012, 0, 0, -0.012);
+  const matted = kind === 1 || kind === 2 || kind === 4;
+  const f = 0.045, t = 0.04, lip = 0.014;
+  const ow = w + 2 * f, oh = h + 2 * f;
+  const rail = (rw, rh, rx, ry0, rz, rt) => k.box(fm, rw, rh, rt, rx, ry0, rz, { r: 0.004, seg: 2 });
+  rail(ow, f, 0, -f, 0, t); rail(ow, f, 0, h, 0, t); rail(f, oh - 2 * f, -w / 2 - f / 2, 0, 0, t); rail(f, oh - 2 * f, w / 2 + f / 2, 0, 0, t);
+  rail(w + lip, lip, 0, h - lip, t * 0.5, 0.01); rail(w + lip, lip, 0, 0, t * 0.5, 0.01); rail(lip, h - 2 * lip, -w / 2 + lip / 2, lip, t * 0.5, 0.01); rail(lip, h - 2 * lip, w / 2 - lip / 2, lip, t * 0.5, 0.01);
+  k.box(M.blackMetal, w + 0.01, h + 0.01, 0.01, 0, 0, -t / 2 + 0.005);               // backing board
   const g = finish(par, k, x, y, z, ry, { receive: true });
-  const tex = paintingTexture(kind, w, h);
-  const cm = new THREE.Mesh(new THREE.PlaneGeometry(w, h), pm('plain', { color: 0xffffff, rough: 0.8, interior: true }));
-  cm.material = cm.material.clone(); cm.material.map = tex; cm.material.needsUpdate = true;
-  cm.position.set(0, h / 2, 0.006);
-  g.add(cm);
+  const mw = matted ? Math.min(w, h) * 0.1 : 0;
+  if (matted) {                                                                       // mat board
+    const mm = new THREE.Mesh(new THREE.PlaneGeometry(w - 2 * lip, h - 2 * lip), pm('paint', { color: 0xf3eee2, rough: 0.9, interior: true }));
+    mm.position.set(0, h / 2, -t / 2 + 0.012); g.add(mm);
+    const bev = new THREE.Mesh(new THREE.PlaneGeometry(w - 2 * lip - 2 * mw + 0.012, h - 2 * lip - 2 * mw + 0.012), pm('paint', { color: 0xfffdf6, rough: 0.9, interior: true }));
+    bev.position.set(0, h / 2, -t / 2 + 0.0135); g.add(bev);
+  }
+  const aw = w - 2 * lip - 2 * mw, ah = h - 2 * lip - 2 * mw;
+  const cmat = pm('plain', { color: 0xffffff, rough: 0.5, interior: true, physical: true, clearcoat: 0.55, ccRough: 0.35 }).clone();
+  cmat.map = paintingTexture(kind, aw, ah); cmat.needsUpdate = true;
+  const cm = new THREE.Mesh(new THREE.PlaneGeometry(aw, ah), cmat);
+  cm.position.set(0, h / 2, -t / 2 + 0.014 + (matted ? 0.004 : 0)); g.add(cm);
   return g;
 }
 

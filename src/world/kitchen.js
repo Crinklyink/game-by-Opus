@@ -117,21 +117,26 @@ export function buildKitchen(par, y0, ctx) {
   // under-cabinet LED strips
   k.box(M.led, 1.95, 0.008, 0.02, 1.9, 1.44, 0.3);
   k.box(M.led, 1.45, 0.008, 0.02, 5.15, 1.44, 0.3);
-  // ---- fridge (two-door with freezer drawer) ----
-  const FW = 0.94, FH = 1.86, FD = 0.74, fx = 6.42;
-  k.box(M.steel, FW, FH, FD, fx, 0.06, FD / 2, { r: 0.012, seg: 3 });
-  k.box(M.blackMetal, FW + 0.012, 0.006, FD + 0.012, fx, 1.25, FD / 2 + 0.002);      // seam fridge/freezer
-  k.box(M.blackMetal, 0.006, 1.2, 0.01, fx - 0.005, 1.27, FD + 0.002);
-  k.box(M.blackMetal, FW * 0.98, 0.02, 0.008, fx, 0.13, FD + 0.002);                 // bottom grille
-  for (let i = 0; i < 8; i++) k.box(M.blackMetal, FW * 0.9, 0.003, 0.004, fx, 0.075 + i * 0.006, FD + 0.003);
-  pullBar(k, M.steel, fx - 0.06, 1.3, FD + 0.002, 0.7, true); pullBar(k, M.steel, fx + 0.06, 1.3, FD + 0.002, 0.7, true);
-  pullBar(k, M.steel, fx, 0.7, FD + 0.002, 0.72, false);
-  k.box(M.glassBlack, 0.24, 0.32, 0.01, fx + 0.22, 1.48, FD + 0.006, { r: 0.004 });
-  k.box(M.ledCool, 0.16, 0.02, 0.004, fx + 0.22, 1.5, FD + 0.012);
-  for (const sx of [-1, 1]) for (const yy of [0.5, 1.75]) k.cyl(M.steel, 0.01, 0.01, 0.05, fx + sx * (FW / 2 - 0.02), yy, FD + 0.005, { rx: Math.PI / 2, cy: true, seg: 8 });
+  // ---- fridge (French doors over a freezer drawer): dark carcass, three proud stainless doors with gaps, pulls, ice/water panel ----
+  const FW = 0.94, FH = 1.86, FD = 0.74, fx = 6.42, fy = 0.06;
+  const inox = pm('metal', { color: 0x9aa0a6, p: [1, 150, 0, 0], interior: true });                    // graphite stainless, brushed
+  k.box(M.blackMetal, FW, FH, FD, fx, fy, FD / 2, { r: 0.012, seg: 3 });                               // carcass (visible in the door gaps and sides)
+  k.box(inox, FW, FH - 0.004, 0.02, fx, fy, 0.0 + 0.004, { r: 0.01 });                                 // back plate
+  k.box(inox, 0.012, FH, FD, fx - FW / 2 + 0.006, fy, FD / 2, { r: 0.004 }); k.box(inox, 0.012, FH, FD, fx + FW / 2 - 0.006, fy, FD / 2, { r: 0.004 });   // side skins
+  const dz = FD + 0.012, gap = 0.005, topY = 1.25, dH = fy + FH - topY - gap;
+  for (const sx of [-1, 1]) k.box(inox, FW / 2 - gap * 1.5, dH, 0.045, fx + sx * (FW / 4 - gap * 0.25), topY + gap, dz - 0.0225, { r: 0.012, seg: 3 });   // French doors
+  k.box(inox, FW - 0.01, topY - fy - 0.17 - gap, 0.045, fx, fy + 0.17, dz - 0.0225, { r: 0.012, seg: 3 });                              // freezer drawer
+  k.box(M.blackMetal, FW - 0.02, 0.16, 0.03, fx, fy, FD - 0.02);                                       // kick grille
+  for (let i = 0; i < 8; i++) k.box(M.blackMetal, FW * 0.86, 0.004, 0.006, fx, fy + 0.02 + i * 0.018, FD + 0.002);
+  pullBar(k, inox, fx - 0.06, 1.34, dz + 0.0005, 0.44, true); pullBar(k, inox, fx + 0.06, 1.34, dz + 0.0005, 0.44, true);   // French-door pulls stay inside the door
+  pullBar(k, inox, fx, 1.12, dz + 0.0005, 0.74, false);                                                 // freezer drawer pull
+  k.box(M.glassBlack, 0.2, 0.3, 0.008, fx + 0.22, 1.46, dz + 0.0005, { r: 0.004 });                    // ice / water panel on the right door
+  k.box(M.ledCool, 0.12, 0.02, 0.004, fx + 0.22, 1.62, dz + 0.006);
+  k.box(M.blackMetal, 0.08, 0.05, 0.02, fx + 0.22, 1.36, dz + 0.0, { r: 0.006 });
+  for (const sx of [-1, 1]) for (const yy of [1.3, 1.82]) k.cyl(M.chrome, 0.011, 0.011, 0.05, fx + sx * (FW / 2 - 0.02), yy, dz + 0.002, { rx: Math.PI / 2, cy: true, seg: 8 });   // hinge caps
   // magnets, photos, a child's drawing and a list on the fridge door
-  for (let i = 0; i < 6; i++) k.box(pm('paint', { color: [0xe8e0c8, 0xd45b4b, 0x3f7a9b, 0xe0b040, 0xf2f2f2, 0x7a9e6a][i], rough: 0.7, interior: true }), 0.09 + R() * 0.06, 0.11 + R() * 0.06, 0.004, fx - 0.3 + (i % 3) * 0.2 + R() * 0.03, 1.4 + Math.floor(i / 3) * 0.2, FD + 0.005, { ry: (R() - 0.5) * 0.3 });
-  for (let i = 0; i < 6; i++) k.cyl(pm('plain', { color: [0xd94a3c, 0x2f6fa8, 0xe8c03a, 0x2a9d6a, 0xd94a3c, 0x1b1b1d][i], rough: 0.4, interior: true }), 0.008, 0.008, 0.008, fx - 0.3 + (i % 3) * 0.2 + 0.03, 1.46 + Math.floor(i / 3) * 0.2, FD + 0.01, { rx: Math.PI / 2, cy: true, seg: 8 });
+  for (let i = 0; i < 6; i++) k.box(pm('paint', { color: [0xe8e0c8, 0xd45b4b, 0x3f7a9b, 0xe0b040, 0xf2f2f2, 0x7a9e6a][i], rough: 0.7, interior: true }), 0.09 + R() * 0.06, 0.11 + R() * 0.06, 0.004, fx - 0.3 + (i % 3) * 0.2 + R() * 0.03, 1.4 + Math.floor(i / 3) * 0.2, FD + 0.019, { ry: (R() - 0.5) * 0.3 });
+  for (let i = 0; i < 6; i++) k.cyl(pm('plain', { color: [0xd94a3c, 0x2f6fa8, 0xe8c03a, 0x2a9d6a, 0xd94a3c, 0x1b1b1d][i], rough: 0.4, interior: true }), 0.008, 0.008, 0.008, fx - 0.3 + (i % 3) * 0.2 + 0.03, 1.46 + Math.floor(i / 3) * 0.2, FD + 0.024, { rx: Math.PI / 2, cy: true, seg: 8 });
   // ---- cooktop: ceramic glass with four burner rings ----
   k.box(M.glassBlack, 0.78, 0.008, 0.52, 3.65, BH + 0.036, 0.3, { r: 0.002 });
   const ringM = pm('plain', { color: 0x2a2a2d, rough: 0.35, metal: 0.5, interior: true });

@@ -182,7 +182,7 @@ export function buildApartment(scene, ctx) {
   const BK = new Kit();
   const bx = -34.4, bz = 17.5;
   F.bistroTable(BK, M, bx, bz);
-  F.bistroChair(BK, M, bx - 0.75, bz, -Math.PI / 2 + 0.12); F.bistroChair(BK, M, bx + 0.72, bz + 0.05, Math.PI / 2 - 0.1);
+  F.bistroChair(BK, M, bx - 0.75, bz, Math.PI / 2 + 0.12); F.bistroChair(BK, M, bx + 0.72, bz + 0.05, -Math.PI / 2 - 0.1);   // chair fronts (+z local) face the table
   // a side stool with a lantern, and a candle lantern on the deck
   BK.cyl(M.oak, 0.17, 0.17, 0.035, -31.9, 0.44, 18.9, { seg: 24 });
   for (let i = 0; i < 3; i++) { const a2 = i * 2.094; BK.strut(M.blackMetal, [-31.9 + Math.cos(a2) * 0.1, 0.44, 18.9 + Math.sin(a2) * 0.1], [-31.9 + Math.cos(a2) * 0.16, 0, 18.9 + Math.sin(a2) * 0.16], 0.01, 0.007, { seg: 6 }); }
@@ -267,9 +267,9 @@ export function buildApartment(scene, ctx) {
   gEmit(groups.living, { pos: new THREE.Vector3(-39.2, Y + 2.3, 26.2), color: 0xffdcb0, intensity: 20, distance: 13 });
   // shelf lights + art
   F.artwork(par, -41.83, Y + 0.95, 23.9, Math.PI / 2, 0.9, 1.2, 0, 'walnut');
-  F.artwork(par, -41.83, Y + 1.1, 30.7, Math.PI / 2, 1.3, 0.85, 2, 'brass');
-  F.artwork(par, -35.4, Y + 1.25, 32.375, Math.PI, 0.9, 0.7, 1, 'black');
-  F.artwork(par, -37.4, Y + 1.15, 32.375, Math.PI, 1.05, 0.8, 0, 'brass');
+  F.artwork(par, -41.83, Y + 1.1, 30.7, Math.PI / 2, 1.3, 0.85, 3, 'brass');
+  F.artwork(par, -35.4, Y + 1.25, 32.375, Math.PI, 0.9, 0.7, 4, 'black');
+  F.artwork(par, -37.4, Y + 1.15, 32.375, Math.PI, 1.05, 0.8, 1, 'brass');
   // plants
   F.monstera(par, Y, -33.55, 21.5, 1.15, 3);
   F.fiddleFig(par, Y, -41.35, 31.25, 1.0, 4);
@@ -334,7 +334,7 @@ export function buildApartment(scene, ctx) {
   buildDresser(par, Y, -42.34, 25.9, -Math.PI / 2);
   // leaning full-length mirror + a plant in the north-west corner + a woven laundry basket
   { const mk = new Kit(); const mm = pm('plain', { color: 0xdfe6ea, metal: 1, rough: 0.02, interior: true });
-    mk.box(M.walnut, 0.62, 1.7, 0.035, 0, 0.0, 0, { r: 0.008, rx: -0.09 }); mk.box(mm, 0.54, 1.6, 0.006, 0, 0.05, 0.021, { rx: -0.09 });
+    mk.box(M.walnut, 0.62, 1.7, 0.035, 0, 0.0, 0, { r: 0.008, rx: -0.09 }); G.mirrors?.add(par, { name: 'leaning', pos: [-42.16 - 0.022, Y + 0.85, 27.9], normal: [-Math.cos(0.09), Math.sin(0.09), 0], quads: [{ w: 0.54, h: 1.6 }], res: 768, room: { x0: -49.2, x1: -41.8, z0: 20.3, z1: 29.1, y0: Y - 1, y1: Y + 3.8 } });
     F.finish(par, mk, -42.16, Y, 27.9, -Math.PI / 2 + 0.0, { });
     const bk = new Kit(); const wick = pm('rug', { color: 0xb8956a, col2: 0x7a5a38, p: [4, 0.2, 0.2, 0], interior: true });
     bk.lathe(wick, [[0, 0], [0.2, 0], [0.24, 0.05], [0.27, 0.45], [0.28, 0.5], [0.255, 0.5], [0.23, 0.45], [0, 0.05]], 0, 0, 0, { seg: 24 });
@@ -366,11 +366,12 @@ export function buildApartment(scene, ctx) {
     k.box(dm, w, h, t, w / 2, 0, 0, { r: 0.004 });
     // raised panel mouldings on both faces (two panels)
     for (const fs of [1, -1]) {
-      const zf = fs * (t / 2 + 0.005), mw = 0.028;
+      const zf = fs * (t / 2 + 0.008), mw = 0.04;
       for (const [py, ph] of [[1.42, 0.82], [0.24, 1.0]]) {
         const pw = w - 0.36;
-        k.box(dm, pw, mw, 0.012, w / 2, py, zf, { r: 0.002 }); k.box(dm, pw, mw, 0.012, w / 2, py + ph - mw, zf, { r: 0.002 });
-        k.box(dm, mw, ph - 2 * mw, 0.012, w / 2 - pw / 2 + mw / 2, py + mw, zf, { r: 0.002 }); k.box(dm, mw, ph - 2 * mw, 0.012, w / 2 + pw / 2 - mw / 2, py + mw, zf, { r: 0.002 });
+        k.box(dm, pw, mw, 0.018, w / 2, py, zf, { r: 0.004 }); k.box(dm, pw, mw, 0.018, w / 2, py + ph - mw, zf, { r: 0.004 });
+        k.box(dm, mw, ph - 2 * mw, 0.018, w / 2 - pw / 2 + mw / 2, py + mw, zf, { r: 0.004 }); k.box(dm, mw, ph - 2 * mw, 0.018, w / 2 + pw / 2 - mw / 2, py + mw, zf, { r: 0.004 });
+        k.box(M.blackMetal, pw - 2 * mw, ph - 2 * mw, 0.002, w / 2, py + mw, fs * (t / 2 + 0.0015), {});          // shadowed recess inside the moulding
       }
     }
     for (const fs of [1, -1]) {                                            // lever handle with a round rose on both faces
@@ -378,6 +379,8 @@ export function buildApartment(scene, ctx) {
       k.cyl(M.brass, 0.011, 0.011, 0.034, w - 0.07, 1.02, fs * (t / 2 + 0.024), { rx: Math.PI / 2, cy: true, seg: 8 });
       k.box(M.brass, 0.17, 0.02, 0.022, w - 0.07 - 0.075, 1.02, fs * (t / 2 + 0.042), { r: 0.009, seg: 3 });
     }
+    for (const hy of [0.28, 1.2, 2.08]) k.cyl(M.blackMetal, 0.011, 0.011, 0.1, 0.006, hy - 0.05, 0, { seg: 8 });          // barrel hinges on the hinge edge
+    k.box(M.brass, 0.022, 0.16, 0.012, w - 0.004, 0.96, 0, {});                                                    // latch plate on the strike edge
     if (o.peep) { k.cyl(M.brass, 0.008, 0.008, 0.02, w / 2, 1.55, 0.02, { rx: Math.PI / 2, cy: true, seg: 8 }); k.box(M.brass, 0.1, 0.06, 0.01, w / 2, 1.9, 0.024); }
     const pivot = new THREE.Group();
     const mesh = new THREE.Group(); k.mesh(mesh, { occ: false }); pivot.add(mesh);
@@ -429,7 +432,7 @@ export function buildApartment(scene, ctx) {
   // radio
   it({ pos: new THREE.Vector3(-39.0, Y + 1.85, 32.05), r: 0.35, label: () => (G.audio?.radioOn ? 'Turn radio off' : 'Turn radio on'), act: () => G.audio?.toggleRadio?.() });
   // trading desk
-  it({ pos: new THREE.Vector3(-38.8, Y + 1.05, 22.1), r: 1.5, maxDist: 2.6, label: () => 'Use trading terminal', act: () => gm().openMarket?.() });
+  it({ pos: new THREE.Vector3(-38.8, Y + 1.05, 22.1), r: 1.5, maxDist: 2.6, label: () => 'Sit down at the trading desk', act: () => gm().sit?.({ x: -38.8, y: Y + 1.16, z: 23.0, yaw: 0, kind: 'desk' }) });
   // sofa
   it({ pos: new THREE.Vector3(-37.15, Y + 0.6, 27.0), r: 1.4, label: () => 'Sit on the sofa', act: () => gm().sit?.({ x: -37.35, y: Y + 0.98, z: 27.0, yaw: Math.PI / 2 + 0.0, kind: 'sofa' }) });
   it({ pos: new THREE.Vector3(-38.4, Y + 0.6, 24.8), r: 0.6, label: () => 'Sit in the armchair', act: () => gm().sit?.({ x: -38.4, y: Y + 0.98, z: 24.8, yaw: Math.PI * 0.75, kind: 'chair' }) });
@@ -470,6 +473,6 @@ export function buildApartment(scene, ctx) {
 }
 
 function artwork_bedroom(par, Y, M) {
-  F.artwork(par, -48.94, Y + 1.05, 21.6, Math.PI / 2, 0.7, 0.9, 2, 'black');
-  F.artwork(par, -42.115, Y + 1.05, 24.8, -Math.PI / 2, 1.0, 0.7, 0, 'brass');
+  F.artwork(par, -48.94, Y + 1.05, 21.6, Math.PI / 2, 0.7, 0.9, 4, 'black');
+  F.artwork(par, -42.115, Y + 1.05, 24.8, -Math.PI / 2, 1.0, 0.7, 5, 'brass');
 }

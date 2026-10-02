@@ -28,6 +28,18 @@ function drawFloor(ctx, w, h, t, s) {
   }
 }
 
+// stainless door leaf detailing: raised border rails around a slightly darker, recessed centre panel, on the face (dir) people see
+function leafDetail(dk, M, cx, w, h, t, dir) {
+  const rail = 0.04, inset = 0.07, z = dir * (t / 2 + 0.003);
+  const hi = pm('metal', { color: 0xc3c7cc, p: [1, 110, 0, 0], interior: true }), lo = pm('metal', { color: 0x80868c, p: [1, 150, 0, 0], interior: true });
+  dk.box(lo, w - 2 * inset, h - 2 * inset, 0.004, cx, inset, dir * (t / 2 + 0.001), { r: 0.002 });
+  dk.box(hi, w - 2 * inset + rail, rail, 0.008, cx, inset - rail / 2, z, { r: 0.002 });
+  dk.box(hi, w - 2 * inset + rail, rail, 0.008, cx, h - inset - rail / 2, z, { r: 0.002 });
+  dk.box(hi, rail, h - 2 * inset - rail, 0.008, cx - (w - 2 * inset) / 2, inset + rail / 2, z, { r: 0.002 });
+  dk.box(hi, rail, h - 2 * inset - rail, 0.008, cx + (w - 2 * inset) / 2, inset + rail / 2, z, { r: 0.002 });
+  dk.box(M.blackMetal, w, 0.05, 0.012, cx, 0.0, dir * (t / 2 + 0.002));                       // kick plate shadow line
+}
+
 export function buildElevator(scene, opts = {}) {
   const M = palette();
   const E = {
@@ -47,7 +59,8 @@ export function buildElevator(scene, opts = {}) {
   k.box(floorStone, HW * 2 + 0.1, 0.1, D1 - D0 + 0.1, 0, -0.1, (D0 + D1) / 2);
   k.box(M.plasticW, HW * 2 + 0.1, 0.06, D1 - D0 + 0.1, 0, H, (D0 + D1) / 2);
   // back mirror (upper) + steel dado
-  k.box(mirror, HW * 2, H - 0.95, 0.02, 0, 0.9, D1 + 0.01);
+  k.box(M.blackMetal, HW * 2, H - 0.95, 0.02, 0, 0.9, D1 + 0.01);
+  G.mirrors?.add(cab, { name: 'cab', pos: [0, 0.9 + (H - 0.95) / 2, D1 - 0.002], normal: [0, 0, -1], quads: [{ w: HW * 2, h: H - 0.95 }], res: 1024, dynamic: true });
   k.box(seam, HW * 2, 0.9, 0.03, 0, 0, D1 + 0.015);
   k.box(M.brass, HW * 2, 0.03, 0.05, 0, 0.9, D1 - 0.005);
   // handrail
@@ -79,7 +92,7 @@ export function buildElevator(scene, opts = {}) {
   // cab door panels (two) sliding sideways along z = D0
   const dg = { '-1': new THREE.Group(), '1': new THREE.Group() };
   cab.add(dg['-1'], dg['1']);
-  for (const s of [-1, 1]) { dg[s].position.set(0, 0, D0); const dk = new Kit(); dk.box(seam, OW / 2, OH, 0.05, s * OW / 4, 0, 0, { r: 0.003 }); dk.box(M.brass, 0.01, OH - 0.1, 0.055, s * 0.005, 0.05, 0); dk.mesh(dg[s], {}); }
+  for (const s of [-1, 1]) { dg[s].position.set(0, 0, D0); const dk = new Kit(); dk.box(seam, OW / 2, OH, 0.05, s * OW / 4, 0, 0, { r: 0.003 }); leafDetail(dk, M, s * OW / 4, OW / 2, OH, 0.05, 1); dk.box(M.brass, 0.01, OH - 0.1, 0.055, s * 0.005, 0.05, 0); dk.mesh(dg[s], {}); }
   const cabLight = LightPool.add({ pos: new THREE.Vector3(XC, LEVEL_Y[1] + 2.4, ZD + 1.1), color: 0xffe9cc, intensity: 45, distance: 5.5, priority: 2, zone: 'elevator' });
 
   // ---------------- landings (frames, doors, indicators, call buttons) ----------------
@@ -101,7 +114,7 @@ export function buildElevator(scene, opts = {}) {
     const dm = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.21), disp.mat); dm.position.set(0, OH + 0.35, -0.065); dm.rotation.y = Math.PI; g.add(dm);
     const dmk = new Kit(); dmk.box(M.blackMetal, 0.48, 0.26, 0.03, 0, OH + 0.22, -0.045, { r: 0.006 }); dmk.mesh(g, {});
     const pg = { '-1': new THREE.Group(), '1': new THREE.Group() };
-    for (const s of [-1, 1]) { pg[s].position.set(0, 0, -0.02); g.add(pg[s]); const dk = new Kit(); dk.box(seam, OW / 2 - 0.004, OH, 0.045, s * OW / 4, 0, 0, { r: 0.003 }); dk.box(M.blackMetal, 0.006, OH - 0.1, 0.05, s * 0.004, 0.05, 0); dk.mesh(pg[s], {}); }
+    for (const s of [-1, 1]) { pg[s].position.set(0, 0, -0.02); g.add(pg[s]); const dk = new Kit(); dk.box(seam, OW / 2 - 0.004, OH, 0.045, s * OW / 4, 0, 0, { r: 0.003 }); leafDetail(dk, M, s * OW / 4, OW / 2 - 0.004, OH, 0.045, -1); dk.box(M.blackMetal, 0.006, OH - 0.1, 0.05, s * 0.004, 0.05, 0); dk.mesh(pg[s], {}); }
     const block = addCollider(XC - OW / 2, XC + OW / 2, ZD - 0.16, ZD + 0.08, y0, y0 + OH, L);
     const cabWalls = [
       addCollider(XC - HW - 0.06, XC - HW + 0.01, ZD + 0.05, ZD + D1 + 0.06, y0, y0 + H, L),

@@ -208,7 +208,7 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
     vec4 pc = uPlanarMat * vec4(wp, 1.0);
     vec2 ruv = pc.xy / pc.w;
     vec2 grad = vec2(dFdx(hgt), dFdy(hgt)) * 220.0;
-    ruv += grad * 0.4 + (nz(vec3(w*3.0, uTime*0.02)).rg - 0.5) * 0.004 * (1.0 - pud);
+    ruv += clamp(grad * 0.25, vec2(-0.008), vec2(0.008)) + (nz(vec3(w*3.0, uTime*0.02)).rg - 0.5) * 0.003 * (1.0 - pud);   // bounded: unbounded height-derivative jitter showed up as speckle along puddle edges
     float lod = clamp(rough * 5.5, 0.0, 6.0);
     vec3 rc = textureLod(tPlanar, clamp(ruv, 0.002, 0.998), lod).rgb;
     float k = clamp(film * 0.9 + pud, 0.0, 1.0) * refl;

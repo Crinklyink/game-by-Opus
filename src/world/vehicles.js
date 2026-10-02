@@ -188,8 +188,16 @@ function makeCabin(S, bodyWs) {
     const half = smoothLine([[wB, b], [wB - 0.42 * (wB - wR), b + 0.46 * (r - b)], [wR + 0.02, r - 0.02], [wR * 0.6, r], [0, r + 0.005]], per * 4 + 1);
     // arc length bookkeeping (metres)
     const arc = [0]; for (let k = 1; k < half.length; k++) arc.push(arc[k - 1] + Math.hypot(half[k][0] - half[k - 1][0], half[k][1] - half[k - 1][1]));
-    let si = 0, bd = 1e9; half.forEach((pp, k) => { const dd = Math.hypot(pp[0] - (wR + 0.02), pp[1] - (r - 0.02)); if (dd < bd) { bd = dd; si = k; } });
-    const sideLen = arc[si];                                       // belt -> roof edge
+    // arc length from the belt to the roof edge, measured continuously (project the roof-edge target onto the polyline: picking the nearest vertex made the
+    // side-glass / windshield split jump from ring to ring and cut a zigzag through the windshield)
+    let sideLen = arc[arc.length - 1], bd = 1e9;
+    for (let k = 1; k < half.length; k++) {
+      const ax = half[k - 1][0], ay = half[k - 1][1], bx = half[k][0], by = half[k][1], tx = wR + 0.02, ty = r - 0.02;
+      const ex = bx - ax, ey = by - ay, l2 = ex * ex + ey * ey || 1e-9;
+      const t = Math.max(0, Math.min(1, ((tx - ax) * ex + (ty - ay) * ey) / l2));
+      const dd = Math.hypot(ax + ex * t - tx, ay + ey * t - ty);
+      if (dd < bd) { bd = dd; sideLen = arc[k - 1] + Math.sqrt(l2) * t; }
+    }
     const ring = [], ringWin = [];
     const endD = Math.min(x - S.xRear, S.xFront - x);                 // glass stops at the visible base of the windshield / backlight, not on the buried extension
     for (let k = 0; k < half.length; k++) { ring.push([x, half[k][1], -half[k][0]]); ringWin.push([arc[k], sideLen, endD]); }
@@ -323,7 +331,7 @@ function buildParts(name, S) {
   parts.interior.push(T(new THREE.TorusGeometry(0.17, 0.014, 6, 18), S.driverX + 0.46, belt + 0.06, -0.4, 0, Math.PI / 2, 0));   // steering wheel
   parts.interior.push(box(0.1, 0.05, 0.3, S.len * 0.0 - 0.0 + (S.seatX[0] - 0.5), belt + 0.02, 0));
   { const c0 = S.seatX[0] - 0.5, c1 = dashX + 0.05; for (const sgn of [-1, 1]) parts.interior.push(box(c1 - c0, belt - y0 - 0.22, 0.05, (c0 + c1) / 2, y0 + 0.2 + (belt - y0 - 0.22) / 2, sgn * hw * 0.62)); }   // door cards
-  parts.interiorLight.push(box(S.xFront2 - S.xRear - 0.3, 0.03, 1.15, (S.xFront2 + S.xRear) / 2, S.roofH - 0.055, 0));   // headliner
+  parts.interiorLight.push(box(S.xFront2 - S.xRear - 0.5, 0.03, 0.9, (S.xFront2 + S.xRear) / 2 - 0.05, S.roofH - 0.13, 0));   // headliner: kept well inside the roof skin   // headliner
   parts.driver.push(ball(0.11, S.driverX, belt + 0.42, -0.4, 1, 1.08, 1, 12));
   parts.driver.push(rbox(0.22, 0.44, 0.34, 0.06, S.driverX - 0.05, seatY + 0.28, -0.4));
   parts.driver.push(T(new THREE.CylinderGeometry(0.045, 0.05, 0.12, 8), S.driverX - 0.02, belt + 0.27, -0.4));

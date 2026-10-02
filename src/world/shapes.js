@@ -86,6 +86,14 @@ export function throwPillow(k, mat, w, h, d, x, y, z, o = {}) {
   return k.push(mat, geo, mat4(x, y + h / 2, z, o.rx || 0, o.ry || 0, o.rz || 0));
 }
 
+// Pillow resting on a surface and leaning back toward -z (a headboard / sofa back): (x, z0, yb) is where its lowest edge touches,
+// theta = lean from flat. The centre is solved so the pillow sits on the surface instead of hovering above it.
+export function leanPillow(k, mat, w, h, d, x, z0, yb, theta, o = {}) {
+  const sn = Math.sin(theta), cs = Math.cos(theta);
+  const cy = yb + (d / 2) * sn + (h / 2) * cs, cz = z0 - (d / 2) * cs + (h / 2) * sn;
+  return throwPillow(k, mat, w, h, d, x, cy - h / 2, cz, { rx: theta, ...o });
+}
+
 // turned wooden leg: lathe profile with a ferrule ring, slim taper and a collar under the frame
 export function turnedLeg(k, mat, x, y, z, h, r = 0.022, o = {}) {
   const rb = r * (o.foot ?? 0.62), col = o.collar ?? 0.05;

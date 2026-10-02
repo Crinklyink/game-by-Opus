@@ -542,10 +542,15 @@ export function buildGrocery(scene, glow, ctx) {
     const px = 21.5 + j * 1.5, pz = 15.6 + i * 4.6;
     K.box(crate, 1.3, 0.55, 3.6, px, 0, pz + 1.8, { r: 0.01 });
     K.box(pm('paint', { color: 0x1a5a34, interior: true }), 1.3, 0.04, 3.6, px, 0.55, pz + 1.8);
-    for (let f = 0; f < 34; f++) fruit.push({ x: px + (R() - 0.5) * 1.15, y: 0.62 + R() * 0.16, z: pz + 0.2 + R() * 3.4, c: produceCols[(i * 3 + j) % produceCols.length], s: 0.07 + R() * 0.04 });
+    // a heaped crate of one kind of produce: apples / oranges / lemons / limes / aubergines ... at real sizes (3-5 cm radius), mounded in the middle
+    const ti = (i * 3 + j) % produceCols.length, rad = [0.04, 0.043, 0.032, 0.036, 0.034, 0.028, 0.03, 0.038][ti], sh = [[1, 0.92, 1], [1, 1, 1], [0.88, 0.88, 1.3], [1, 0.95, 1], [1, 1, 1], [0.8, 0.8, 1.9], [0.9, 0.9, 1.4], [1, 0.82, 1]][ti];
+    for (let a = 0; a < 11; a++) for (let b = 0; b < 33; b++) {
+      const u = (a + 0.5) / 11 - 0.5, v = (b + 0.5) / 33 - 0.5, mound = Math.max(0, 1 - (u * 2) ** 2 * 0.7 - (v * 2) ** 2 * 0.5);
+      fruit.push({ x: px + u * 1.2 + (R() - 0.5) * rad * 2.0, y: 0.585 + rad * 0.9 + 0.07 * mound + R() * rad * 0.9, z: pz + 1.8 + v * 3.4 + (R() - 0.5) * rad * 2.0, c: produceCols[ti], s: rad * (0.9 + R() * 0.2), sh, rot: R() * 6.28 });
+    }
     addCollider(px - 0.65, px + 0.65, pz, pz + 3.6, 0, 0.7, 0);
   }
-  { const g = new THREE.SphereGeometry(1, 8, 6); const im = new THREE.InstancedMesh(g, pm('plain', { color: 0xffffff, rough: 0.35, interior: true }), fruit.length); const m = new THREE.Matrix4(), c = new THREE.Color(); fruit.forEach((f, i) => { m.compose(new THREE.Vector3(f.x, f.y, f.z), new THREE.Quaternion(), new THREE.Vector3(f.s, f.s * 0.92, f.s)); im.setMatrixAt(i, m); im.setColorAt(i, c.setHex(f.c)); }); im.receiveShadow = true; par.add(im); }
+  { const g = new THREE.SphereGeometry(1, 9, 6); const im = new THREE.InstancedMesh(g, pm('plain', { color: 0xffffff, rough: 0.35, interior: true }), fruit.length); const m = new THREE.Matrix4(), c = new THREE.Color(), q = new THREE.Quaternion(), e = new THREE.Euler(), v3 = new THREE.Vector3(), sc = new THREE.Vector3(); fruit.forEach((f, i) => { q.setFromEuler(e.set(0, f.rot, 0)); m.compose(v3.set(f.x, f.y, f.z), q, sc.set(f.s * f.sh[0], f.s * f.sh[1], f.s * f.sh[2])); im.setMatrixAt(i, m); im.setColorAt(i, c.setHex(f.c).multiplyScalar(0.85 + R() * 0.3)); }); im.receiveShadow = true; im.castShadow = true; par.add(im); }
   // refrigerated wall (glass doors with glowing interiors)
   const fridgeTex = canvasTex(256, 512, (c, w, h) => { const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#e8f6ff'); g.addColorStop(1, '#a8d0ea'); c.fillStyle = g; c.fillRect(0, 0, w, h); const cc = ['#e83a3a', '#3a8ae8', '#f0c040', '#4ac06a', '#f2f2f2', '#8a3ac8']; const RR = rng(5); for (let r = 0; r < 6; r++) { c.fillStyle = 'rgba(0,0,0,0.25)'; c.fillRect(0, 60 + r * 74, w, 4); for (let k = 0; k < 9; k++) { c.fillStyle = cc[Math.floor(RR() * cc.length)]; c.fillRect(8 + k * 27, 20 + r * 74 + RR() * 10, 22, 42 - RR() * 10); } } }, { aniso: 4 });
   const fridgeM = new THREE.MeshBasicMaterial({ map: fridgeTex, toneMapped: false, color: new THREE.Color(1.3, 1.3, 1.35) });

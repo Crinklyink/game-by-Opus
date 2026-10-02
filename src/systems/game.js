@@ -169,10 +169,11 @@ export class Game {
   // ------------------------------------------------------------------ apartment actions
   sit(pose) {
     if (pose.kind === 'sofa') pose = { ...pose, y: APT_Y + 1.06 }; if (pose.kind === 'chair') pose = { ...pose, y: APT_Y + 1.1 };
-    if (pose.kind === 'desk') pose = { ...pose, y: APT_Y + 1.16 };
+    if (pose.kind === 'desk') pose = { ...pose, y: APT_Y + 1.16, focus: 1.15, useLabel: 'Use trading terminal', onUse: () => this.openMarket() };
     this.player.sitDown(pose);
     this.audio.click?.();
     if (pose.kind === 'sofa') this.toast('Kick back. Press E (or move) to get up.', 2600);
+    if (pose.kind === 'desk') setTimeout(() => { if (this.player.sit === pose || (this.player.sit && this.player.sit.kind === 'desk')) { if (!this.ui.modalOpen) this.openMarket(); } }, 750);   // sitting down at the desk brings up the terminal; E reopens it, moving stands you up
   }
   openMarket() { this.ui.completeGoal('market'); P.openMarket(this); }
   openFridge() { P.openFridge(this); }
