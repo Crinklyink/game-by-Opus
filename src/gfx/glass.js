@@ -96,7 +96,7 @@ void main(){
     rim = smoothstep(0.55, 1.0, length(n)) * clamp(b1.z + b2.z + r1.z + r2.z, 0.0, 1.0);
   }
   float dirt = nz(vec3(vUvM * 3.0, 0.4)).r;
-  float mist = (uRain * 1.6 + uWetGlass * 1.2) + 0.35 * smoothstep(0.55, 0.9, dirt);
+  float mist = (uRain * 1.6 + uWetGlass * 1.2) + 0.1 * smoothstep(0.6, 0.95, dirt);
   float lod = mix(mist, 0.15, clearM);
   vec3 behind = textureLod(tRefract, clamp(suv + off, 0.001, 0.999), lod).rgb;
   behind *= vec3(0.94, 0.975, 0.985);

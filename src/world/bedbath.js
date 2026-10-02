@@ -32,9 +32,13 @@ export function buildBed(par, y0, x, z) {
     const crease = -0.012 * Math.exp(-Math.pow((v - 0.36) * 22, 2));                 // where the top sheet turns back
     return 0.538 + fold + crease - d;
   }, { sw: 84, sh: 84 });
-  // turned-back top sheet (crisp white band) + folded knit throw at the foot
-  cushion(k, M.white, 1.94, 0.028, 0.5, 0, 0.545, -0.34, { r: 0.012, crown: 0.01, seg: 4, rx: -0.02 });
-  cushion(k, M.charcoal, 1.86, 0.06, 0.44, 0, 0.545, 0.7, { r: 0.028, crown: 0.014, pipe: M.charcoal, seg: 4 });
+  // knit throw across the foot of the bed, lying on the duvet and falling over the foot edge (cloth heightfield, not a slab)
+  { const sm = (a, b, t) => { const q = Math.min(1, Math.max(0, (t - a) / (b - a))); return q * q * (3 - 2 * q); };
+    k.cloth(M.charcoal, 1.62, 0.78, 0, 0, BL / 2 - 0.22, (u, v) => {
+      const z = (v - 0.5) * 0.78 + BL / 2 - 0.22, over = z - (BL / 2 - 0.04);
+      const top = 0.566 + 0.008 * Math.sin(u * 23 + v * 5) + 0.004 * Math.sin(u * 61);
+      return over > 0 ? Math.max(0.3, top - over * 7.5 - 0.02 * sm(0.0, 0.04, over)) : top - 0.01 * sm(-0.06, 0.0, over);
+    }, { sw: 60, sh: 30 }); }
   // pillows: euros stand against the headboard, sleepers lean on them, accents + a lumbar in front (every one rests on the mattress or the pillow behind it)
   const PY = 0.54;                                         // mattress / sheet surface
   for (const px of [-0.46, 0.46]) {
@@ -92,7 +96,7 @@ export function buildDresser(par, y0, x, z, ry) {
   k.torus(M.brass, 0.405, 0.005, 0, 1.55, -0.212, { rx: 0, seg: 64, seg2: 5 });
   // the glass is a real planar mirror (src/gfx/mirrors.js); world transform of the dresser's local frame:
   { const c = Math.cos(ry), sn = Math.sin(ry), lz = -0.213;
-    G.mirrors?.add(par, { name: 'dresser', pos: [x + lz * sn, y0 + 1.55, z + lz * c], normal: [sn, 0, c], quads: [{ w: 0.82, h: 0.82, round: true }], res: 640, room: { x0: -49.2, x1: -41.8, z0: 20.3, z1: 29.1, y0: y0 - 1, y1: y0 + 3.8 } }); }
+    G.mirrors?.add(par, { name: 'dresser', pos: [x + lz * sn, y0 + 1.55, z + lz * c], normal: [sn, 0, c], quads: [{ w: 0.82, h: 0.82, round: true }], res: 900, room: { x0: -49.2, x1: -41.8, z0: 20.3, z1: 29.1, y0: y0 - 1, y1: y0 + 3.8 } }); }
   // tray with perfumes, jewellery box, framed photo, small plant
   k.box(M.marbleD, 0.34, 0.015, 0.22, -0.4, 0.82, 0.0, { r: 0.004 });
   k.box(M.brass, 0.35, 0.02, 0.005, -0.4, 0.83, 0.11);
@@ -135,7 +139,7 @@ export function buildWardrobe(par, y0, x, z, ry, W = 2.9) {
   const g = finish(par, k, x, y0, z, ry);
   if (mirrorPanels.length) {                                   // both mirrored doors lie in one plane -> one reflection
     const c = Math.cos(ry), sn = Math.sin(ry), lz = mirrorPanels[0].lz;
-    G.mirrors?.add(par, { name: 'wardrobe', pos: [x + lz * sn, y0 + 0.075 + (H - 0.15) / 2, z + lz * c], normal: [sn, 0, c], quads: mirrorPanels.map((p) => ({ dx: p.dx, w: p.w, h: H - 0.15 })), res: 1024, room: { x0: -49.2, x1: -41.8, z0: 20.3, z1: 29.1, y0: y0 - 1, y1: y0 + 3.8 } });
+    G.mirrors?.add(par, { name: 'wardrobe', pos: [x + lz * sn, y0 + 0.075 + (H - 0.15) / 2, z + lz * c], normal: [sn, 0, c], quads: mirrorPanels.map((p) => ({ dx: p.dx, w: p.w, h: H - 0.15 })), res: 1600, room: { x0: -49.2, x1: -41.8, z0: 20.3, z1: 29.1, y0: y0 - 1, y1: y0 + 3.8 } });
   }
   colBox(x, z, W, D, ry, y0, y0 + H);
   return g;
@@ -206,7 +210,7 @@ export function buildBathroom(par, y0, ctx) {
     k.box(M.brass, 0.02, 0.02, 0.05, bx + 0.05, 0.98, 32.32, { ry: 0.5 });
   }
   // mirror with backlight, a shelf, wall lights
-  G.mirrors?.add(par, { name: 'bath', pos: [-44.7, y0 + 1.8, 32.374], normal: [0, 0, -1], quads: [{ w: 2.6, h: 1.1 }], res: 1280, room: { x0: -49.2, x1: -41.8, z0: 27.5, z1: 32.4, y0: y0 - 1, y1: y0 + 3.8 } });
+  G.mirrors?.add(par, { name: 'bath', pos: [-44.7, y0 + 1.8, 32.374], normal: [0, 0, -1], quads: [{ w: 2.6, h: 1.1 }], res: 1700, room: { x0: -49.2, x1: -41.8, z0: 27.5, z1: 32.4, y0: y0 - 1, y1: y0 + 3.8 } });
   k.box(M.blackMetal, 2.6, 1.1, 0.01, -44.7, 1.25, 32.388);                                  // backing behind the glass
   k.box(M.brass, 2.66, 0.012, 0.014, -44.7, 2.35, 32.383); k.box(M.brass, 2.66, 0.012, 0.014, -44.7, 1.2, 32.383);
   k.box(M.ledCool, 2.62, 0.016, 0.01, -44.7, 2.36, 32.38);

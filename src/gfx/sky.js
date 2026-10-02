@@ -121,7 +121,7 @@ export class Atmosphere {
     u.uGlowCol.value.setRGB(k.glow[0], k.glow[1], k.glow[2]);
     const cg = 0.03 * night * (1 + oc * 1.5);
     u.uCityGlow.value.setRGB(0.82 * cg, 0.5 * cg, 0.3 * cg);
-    u.uFogDen.value = 0.00082 + oc * 0.0017 + W.mist * 0.0011 + night * 0.0002;
+    u.uFogDen.value = 0.00056 + oc * 0.0017 + W.mist * 0.0011 + night * 0.0002;
     u.uLit.value = windowLitFraction(hour);
 
     // ---- key light ----
@@ -135,7 +135,7 @@ export class Atmosphere {
       L.color.setRGB(0.6, 0.72, 1.0); L.intensity = moonI + W.flash * 2; this.keyDir.copy(u.uMoonDir.value);
     }
     // environment / exposure levels
-    this.envIntensity = lerp(0.1, 0.82, this.day) * (1 - 0.15 * oc) + W.flash * 1.2;   // a little less sky fill in the shade keeps sunny streets from going flat
+    this.envIntensity = lerp(0.1, 0.72, this.day) * (1 - 0.15 * oc) + W.flash * 1.2;   // a little less sky fill in the shade keeps sunny streets from going flat
     this.scene.environmentIntensity = this.envIntensity;
     this.updateShadow(focus);
 

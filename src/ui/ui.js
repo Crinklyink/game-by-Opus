@@ -19,8 +19,8 @@ export class UI {
         <div id="goals"><h6>Getting settled</h6><div id="goalList"></div></div>
         <div id="money"><div class="cash"></div><div class="eq"></div></div>
         <div id="needs">
-          <div class="bar" id="bHunger"><span>Hunger</span><i><b style="width:70%"></b></i></div>
-          <div class="bar" id="bEnergy"><span>Energy</span><i><b style="width:85%"></b></i></div>
+          <div class="need" id="bHunger"><svg viewBox="0 0 24 24"><path d="M7 2v9a3 3 0 0 0 2 2.8V22h2v-8.2A3 3 0 0 0 13 11V2h-1.5v7h-1V2h-1v7h-1V2zM17 2c-1.7 0-3 2.2-3 5v6h2v9h2V2z"/></svg><div class="nb"><div class="nl"><span>Food</span><em></em></div><i><b></b></i></div></div>
+          <div class="need" id="bEnergy"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg><div class="nb"><div class="nl"><span>Energy</span><em></em></div><i><b></b></i></div></div>
         </div>
         <div id="carry"></div>
         <div id="toasts"></div>
@@ -94,8 +94,14 @@ export class UI {
     e.loc.textContent = s.zoneLabel;
     e.cash.textContent = fmtMoney(s.cash, 2);
     e.eq.textContent = `Portfolio ${fmtMoney(s.portfolio, 0)}${s.market ? '' : ''}`;
-    const setBar = (el, v) => { el.querySelector('b').style.width = `${clamp(v, 0, 100)}%`; el.classList.toggle('low', v < 22); };
-    setBar(e.hunger, s.hunger); setBar(e.energy, s.energy);
+    // both meters are "how full": food 100 = just ate, energy 100 = rested. Words + colour say what to do about it.
+    const setBar = (el, v, words) => {
+      v = clamp(v, 0, 100);
+      el.querySelector('b').style.width = `${v}%`;
+      el.querySelector('em').textContent = v < 15 ? words[0] : v < 35 ? words[1] : v < 70 ? words[2] : words[3];
+      el.classList.toggle('mid', v < 45 && v >= 22); el.classList.toggle('low', v < 22);
+    };
+    setBar(e.hunger, s.hunger, ['Starving', 'Hungry', 'Peckish', 'Full']); setBar(e.energy, s.energy, ['Exhausted', 'Tired', 'OK', 'Rested']);
     if (s.carry) { e.carry.style.display = 'block'; e.carry.textContent = s.carry; } else e.carry.style.display = 'none';
   }
   renderGoals() {

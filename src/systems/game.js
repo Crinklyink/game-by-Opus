@@ -130,7 +130,7 @@ export class Game {
     const fx = this.post.fx;
     const hungry = 1 - smooth(6, 30, S.hunger), tired = 1 - smooth(6, 30, S.energy);
     const t = Math.min(1, dt * 2);
-    fx.sat = lerp(fx.sat, 1 - hungry * 0.32 - tired * 0.15, t);
+    fx.sat = lerp(fx.sat, 1.08 - hungry * 0.32 - tired * 0.15, t);
     fx.vig = lerp(fx.vig, 0.26 + tired * 0.32 + hungry * 0.08, t);
     // ---- HUD (4 Hz) ----
     this.hudAcc += dt;

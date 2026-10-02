@@ -17,28 +17,26 @@ export function openMarket(game) {
     const tk = mk.T(sel), pos = mk.pos[sel];
     return `
     <div class="head">
-      <b>MERIDIAN MARKETS</b>
-      <span class="chip ${open ? 'open' : 'closed'}">${open ? 'MARKET OPEN' : 'MARKET CLOSED · opens 9:30 AM'}</span>
-      <span class="chip">${fmtClock(G.time.hour)}</span>
+      <div><h2>Meridian Markets</h2><div class="sub" style="margin:0"><span class="chip ${open ? 'open' : 'closed'}">${open ? 'Market open' : 'Market closed · opens 9:30 AM'}</span> &nbsp;${fmtClock(G.time.hour)} · cash <b class="price">${fmtMoney(S.cash)}</b></div></div>
       <div class="grow"></div>
       <div class="tabs" style="margin:0">
         <button class="tab ${tab === 'market' ? 'on' : ''}" data-tab="market">Markets</button>
         <button class="tab ${tab === 'port' ? 'on' : ''}" data-tab="port">Portfolio</button>
         <button class="tab ${tab === 'shop' ? 'on' : ''}" data-tab="shop">Home shop</button>
       </div>
-      <button class="btn small" data-x="close">Close <kbd>Esc</kbd></button>
+      <button class="btn" data-x="close">Close</button>
     </div>
     ${tab === 'market' ? `
     <div class="body">
       <div class="col">
-        <h3 style="margin-top:0">Watchlist</h3>
+        <h3 style="margin-top:0">Watchlist</h3><div class="card" style="padding:4px 6px">
         <table><tr><th>Symbol</th><th>Last</th><th>Day</th></tr>
         ${mk.tickers.map((t) => `<tr class="hoverable ${t.sym === sel ? 'sel' : ''}" data-sym="${t.sym}"><td><b>${t.sym}</b><br><span style="color:var(--dim);font-size:11px">${t.name}</span></td><td>${t.price.toFixed(2)}</td><td class="${t.chg >= 0 ? 'up' : 'down'}">${pct(t.chg)}</td></tr>`).join('')}
-        </table>
+        </table></div>
       </div>
       <div class="col">
-        <div class="row" style="margin-bottom:8px"><div><div class="big" style="font-size:30px">${tk.sym} <span style="font-size:22px">${tk.price.toFixed(2)}</span></div><div style="color:var(--dim);font-size:13px">${tk.name} · ${tk.sector}</div></div>
-          <div class="grow"></div><div style="text-align:right"><div class="${tk.chg >= 0 ? 'up' : 'down'}" style="font-size:20px;font-weight:700">${pct(tk.chg)}</div><div style="color:var(--dim);font-size:12px">since the open</div></div></div>
+        <div class="row" style="margin-bottom:8px"><div><div class="big" style="font-size:30px">${tk.sym} <span style="font-size:22px" id="selPx">${tk.price.toFixed(2)}</span></div><div style="color:var(--dim);font-size:13px">${tk.name} · ${tk.sector}</div></div>
+          <div class="grow"></div><div style="text-align:right"><div id="selChg" class="${tk.chg >= 0 ? 'up' : 'down'}" style="font-size:20px;font-weight:700">${pct(tk.chg)}</div><div style="color:var(--dim);font-size:12px">since the open</div></div></div>
         <canvas id="chart" width="1000" height="270"></canvas>
         <h3 style="margin-top:12px">News wire</h3>
         <div style="font-size:13px;line-height:1.55;color:#c9d6e2;max-height:84px;overflow:hidden">${mk.headlines.slice(-4).reverse().map((h, i) => `<div style="opacity:${1 - i * 0.2}">• ${h}</div>`).join('')}</div>
@@ -75,7 +73,7 @@ export function openMarket(game) {
     const ctx = cv.getContext('2d'), w = cv.width, h = cv.height;
     const tk = mk.T(sel);
     const cand = tk.hist.slice(-70).concat(tk.cur ? [{ o: tk.cur.o, h: tk.cur.h, l: tk.cur.l, c: tk.cur.c }] : []);
-    ctx.fillStyle = '#0b0f14'; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#10151d'; ctx.fillRect(0, 0, w, h);
     let lo = 1e9, hi = -1e9; for (const c of cand) { lo = Math.min(lo, c.l); hi = Math.max(hi, c.h); }
     const pos = mk.pos[sel]; if (pos && pos.shares) { lo = Math.min(lo, pos.avg); hi = Math.max(hi, pos.avg); }
     const pad = (hi - lo) * 0.08 + 0.01; lo -= pad; hi += pad;
@@ -85,7 +83,7 @@ export function openMarket(game) {
     const cw = pw / Math.max(cand.length, 1), Y = (v) => py + ph - ((v - lo) / (hi - lo)) * ph;
     cand.forEach((c, i) => { const x = px + i * cw + cw / 2, up = c.c >= c.o; ctx.strokeStyle = ctx.fillStyle = up ? '#37d67a' : '#ff5c72'; ctx.beginPath(); ctx.moveTo(x, Y(c.h)); ctx.lineTo(x, Y(c.l)); ctx.stroke(); ctx.fillRect(x - cw * 0.34, Math.min(Y(c.o), Y(c.c)), cw * 0.68, Math.max(1.5, Math.abs(Y(c.o) - Y(c.c)))); });
     if (pos && pos.shares) { ctx.setLineDash([6, 5]); ctx.strokeStyle = '#ffb454'; ctx.beginPath(); ctx.moveTo(px, Y(pos.avg)); ctx.lineTo(px + pw, Y(pos.avg)); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = '#ffb454'; ctx.fillText('cost ' + pos.avg.toFixed(2), px + 6, Y(pos.avg) - 5); }
-    const last = tk.price; ctx.fillStyle = '#4fd1c5'; ctx.fillRect(px + pw, Y(last) - 9, 66, 18); ctx.fillStyle = '#04201d'; ctx.font = 'bold 12px ui-monospace,Consolas,monospace'; ctx.fillText(last.toFixed(2), px + pw + 6, Y(last) + 4);
+    const last = tk.price; ctx.setLineDash([2, 4]); ctx.strokeStyle = 'rgba(255,180,84,.45)'; ctx.beginPath(); ctx.moveTo(px, Y(last)); ctx.lineTo(px + pw, Y(last)); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = '#ffb454'; ctx.fillRect(px + pw, Y(last) - 9, 66, 18); ctx.fillStyle = '#1c1406'; ctx.font = 'bold 12px ui-monospace,Consolas,monospace'; ctx.fillText(last.toFixed(2), px + pw + 6, Y(last) + 4);
   };
   const bind = (p) => {
     p.querySelector('[data-x=close]')?.addEventListener('click', () => ui.close());
@@ -102,7 +100,9 @@ export function openMarket(game) {
   };
   const render = () => { const p = ui.panel; p.innerHTML = html(); bind(p); draw(); };
   ui.open(html(), { cls: 'term', onClose: () => { clearInterval(timer); game.onTerminalClosed?.(); }, onMount: (p) => { bind(p); draw(); } });
-  timer = setInterval(() => { if (!ui.modalOpen) return clearInterval(timer); draw(); if (tab === 'market') { const rows = $$(ui.panel, '[data-sym]'); rows.forEach((r) => { const t = mk.T(r.dataset.sym); r.children[1].textContent = t.price.toFixed(2); r.children[2].textContent = pct(t.chg); r.children[2].className = t.chg >= 0 ? 'up' : 'down'; }); } }, 500);
+  timer = setInterval(() => { if (!ui.modalOpen) return clearInterval(timer); draw(); if (tab === 'market') { const rows = $$(ui.panel, '[data-sym]'); rows.forEach((r) => { const t = mk.T(r.dataset.sym); r.children[1].textContent = t.price.toFixed(2); r.children[2].textContent = pct(t.chg); r.children[2].className = t.chg >= 0 ? 'up' : 'down'; });
+    const t = mk.T(sel), px = ui.panel.querySelector('#selPx'), ch = ui.panel.querySelector('#selChg'), est = ui.panel.querySelector('#est');
+    if (px) px.textContent = t.price.toFixed(2); if (ch) { ch.textContent = pct(t.chg); ch.className = t.chg >= 0 ? 'up' : 'down'; } if (est) est.textContent = fmtMoney(t.price * qty * 1.0008); } }, 500);
   game.audio?.type?.();
 }
 

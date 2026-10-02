@@ -73,14 +73,16 @@ export function buildDesk(par, y0, x, z, ry, ctx) {
   // tilted to face the eye; bottom edge 12 cm above the desk, centre a touch below eye height
   const mw = 0.64, mh = 0.37, mt = 0.022, bez = 0.011, R = 1.1, eyeZ = 1.05;
   const g0 = new THREE.Group();
-  [{ phi: -0.575, mode: 1, seed: 1 }, { phi: 0, mode: 0, seed: 0 }, { phi: 0.575, mode: 2, seed: 2 }].forEach((c) => {
+  [{ phi: -0.625, mode: 1, seed: 1 }, { phi: 0, mode: 0, seed: 0 }, { phi: 0.625, mode: 2, seed: 2 }].forEach((c) => {
     const px = R * Math.sin(c.phi), pz = eyeZ - R * Math.cos(c.phi), yaw = -c.phi;
     const local = new Kit();
-    local.box(M.plasticB, mw, mh, mt, 0, 0, 0, { r: 0.006, seg: 3 });                                    // panel + bezel
-    local.box(M.blackMetal, mw * 0.55, mh * 0.62, 0.02, 0, -mh * 0.31, -mt * 0.5 - 0.008, { r: 0.008 });    // rear housing
-    local.box(M.blackMetal, 0.05, 0.19, 0.022, 0, -mh / 2 - 0.1, -0.035, { r: 0.004 });                    // neck
-    local.box(M.blackMetal, 0.3, 0.012, 0.2, 0, -mh / 2 - 0.12, -0.03, { r: 0.005 });                      // foot
-    local.box(M.chrome, 0.012, 0.012, 0.012, 0, -mh / 2 - 0.03, -mt / 2 - 0.0, {});                         // power LED
+    // local origin = centre of the panel (Kit boxes are bottom-anchored unless cy is set; the screen plane is centred, so everything here is too)
+    const deskY = -(0.12 + mh / 2);
+    local.box(M.plasticB, mw, mh, mt, 0, 0, 0, { r: 0.006, seg: 3, cy: true });                          // panel + bezel
+    local.box(M.blackMetal, mw * 0.55, mh * 0.6, 0.024, 0, -mh * 0.04, -mt / 2 - 0.011, { r: 0.008, cy: true });   // rear housing
+    local.box(M.blackMetal, 0.05, -deskY - 0.06, 0.022, 0, deskY, -0.05, { r: 0.004 });                  // neck: foot up into the housing
+    local.box(M.blackMetal, 0.28, 0.012, 0.2, 0, deskY, -0.04, { r: 0.005 });                             // foot on the desk
+    local.box(M.chrome, 0.012, 0.004, 0.006, mw / 2 - 0.04, -mh / 2 + 0.003, mt / 2, { cy: true });       // power LED on the bottom bezel
     const grp = new THREE.Group();
     local.mesh(grp, { occ: false });
     const scr = makeScreen(512, 300, drawChartScreen, { fps: 3 });

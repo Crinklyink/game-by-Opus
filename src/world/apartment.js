@@ -224,22 +224,41 @@ export function buildApartment(scene, ctx) {
   addCollider(-49.1, -34.0, UNIT.z0 - 0.12, UNIT.z0 + 0.06, Y, Y + CH, 1);
   // handle
   // ================================================================== curtains (sheer, per bay, two panels)
-  const sheerMat = pm('fabric', { color: 0xf1ece0, rough: 1, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, interior: true, env: 0.4 });
+  // sheer voile on a ceiling track under the soffit: soft translucent fabric (no procedural speckle), real pleats that bunch up when open,
+  // a weighted hem and a slight drape at the bottom. The pleat count stays fixed, so pulling a panel open packs its folds tighter.
+  const sheerMat = new THREE.MeshStandardMaterial({ color: 0xf4efe6, roughness: 1, metalness: 0, transparent: true, opacity: 0.42, side: THREE.DoubleSide, depthWrite: false, envMapIntensity: 0.5,
+    emissive: 0x16140f, emissiveIntensity: 1 });   // a little self-light = daylight scattering through the voile
+  const hemMat = new THREE.MeshStandardMaterial({ color: 0xe9e2d6, roughness: 1, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false });
   const curtainGroup = new THREE.Group(); par.add(curtainGroup);
   const curtainBays = [0, 1, 2, 3, 4];
-  const panelGeo = new THREE.PlaneGeometry(1, CH - 0.55, 24, 1);
-  { const p = panelGeo.attributes.position; for (let i = 0; i < p.count; i++) p.setZ(i, Math.sin((p.getX(i) + 0.5) * Math.PI * 7) * 0.035); panelGeo.computeVertexNormals(); }
-  for (const b of curtainBays) for (const s of [0, 1]) {
+  const CUR_TOP = Y + CH - 0.31, CUR_H = CH - 0.31 - 0.015;
+  const panelGeo = new THREE.PlaneGeometry(1, CUR_H, 120, 10);
+  { const p = panelGeo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const u = p.getX(i) + 0.5, v = p.getY(i) / CUR_H + 0.5;                                   // v = 0 at the hem, 1 at the track
+      const pleat = Math.sin(u * Math.PI * 2 * 6) * 0.042 + Math.sin(u * Math.PI * 2 * 13 + 1.3) * 0.006;
+      const flare = 1 + 0.35 * (1 - v) * (1 - v);                                                // folds open up a bit toward the floor
+      p.setZ(i, pleat * flare);
+      p.setY(i, p.getY(i) - CUR_H / 2);                                                          // origin at the top (hangs from the track)
+    }
+    panelGeo.computeVertexNormals(); }
+  const hemGeo = new THREE.BoxGeometry(1, 0.035, 0.012);
+  const trackK = new Kit();
+  trackK.box(M.blackMetal, UNIT.x1 - UNIT.x0 - 0.1, 0.02, 0.035, (UNIT.x0 + UNIT.x1) / 2, Y + CH - 0.32, UNIT.z0 + 0.42);
+  trackK.mesh(par, { occ: false });
+  for (const bb of curtainBays) for (const sd of [0, 1]) {
     const m = new THREE.Mesh(panelGeo, sheerMat);
-    m.position.set(-49 + b * 3 + (s ? 2.75 : 0.25), Y + (CH - 0.55) / 2, UNIT.z0 + 0.42);
-    m.userData = { b, s, x0: -49 + b * 3 };
+    m.position.set(-49 + bb * 3 + (sd ? 2.75 : 0.25), CUR_TOP, UNIT.z0 + 0.42);
+    m.renderOrder = 3;
+    const hem = new THREE.Mesh(hemGeo, hemMat); hem.position.set(0, -CUR_H + 0.02, 0); m.add(hem);
+    m.userData = { b: bb, s: sd, x0: -49 + bb * 3 };
     curtainGroup.add(m); out.curtains.push(m);
   }
   out.curtainState = { closed: 0, target: 0 };
   out.updateCurtains = (dt) => {
     const c = out.curtainState; c.closed += (c.target - c.closed) * (1 - Math.exp(-dt * 2.2));
     for (const m of out.curtains) {
-      const { s, x0 } = m.userData, w = 0.5 + c.closed * 1.0;
+      const { s, x0 } = m.userData, w = 0.45 + c.closed * 1.05;
       m.scale.x = w;
       m.position.x = s ? x0 + 2.9 - w / 2 : x0 + 0.1 + w / 2;
     }
@@ -255,7 +274,7 @@ export function buildApartment(scene, ctx) {
 
   // living
   const S = F.sofa(par, Y, -37.15, 27.0, -Math.PI / 2);
-  const AC = F.armchair(par, Y, -38.4, 24.8, -Math.PI / 4);
+  const AC = F.armchair(par, Y, -39.6, 29.6, Math.PI + 0.45);          // across the rug from the sofa, angled toward the TV and the view
   F.coffeeTable(par, Y, -39.55, 27.0);
   F.sideTable(par, Y, -37.2, 24.55);
   const tvScreen = makeScreen(512, 288, drawTV, { fps: 6 });
@@ -278,7 +297,6 @@ export function buildApartment(scene, ctx) {
   const ck = new Kit();
   F.diningChair(ck, M, -36.4, 22.35, 0); F.diningChair(ck, M, -34.8, 22.35, 0);
   F.diningChair(ck, M, -36.4, 24.05, Math.PI); F.diningChair(ck, M, -34.8, 24.05, Math.PI);
-  F.diningChair(ck, M, -37.1, 23.2, Math.PI / 2); F.diningChair(ck, M, -34.1, 23.2, -Math.PI / 2);
   F.finish(par, ck, 0, Y, 0, 0);
   for (const [cx, cz] of [[-36.4, 22.35], [-34.8, 22.35], [-36.4, 24.05], [-34.8, 24.05]]) F.colBox(cx, cz, 0.5, 0.5, 0, Y, Y + 0.9);
   const diningMats = { ...M, bulb: (groups.dining.bulb = M.bulb.clone()) };
@@ -334,7 +352,7 @@ export function buildApartment(scene, ctx) {
   buildDresser(par, Y, -42.34, 25.9, -Math.PI / 2);
   // leaning full-length mirror + a plant in the north-west corner + a woven laundry basket
   { const mk = new Kit(); const mm = pm('plain', { color: 0xdfe6ea, metal: 1, rough: 0.02, interior: true });
-    mk.box(M.walnut, 0.62, 1.7, 0.035, 0, 0.0, 0, { r: 0.008, rx: -0.09 }); G.mirrors?.add(par, { name: 'leaning', pos: [-42.16 - 0.022, Y + 0.85, 27.9], normal: [-Math.cos(0.09), Math.sin(0.09), 0], quads: [{ w: 0.54, h: 1.6 }], res: 768, room: { x0: -49.2, x1: -41.8, z0: 20.3, z1: 29.1, y0: Y - 1, y1: Y + 3.8 } });
+    mk.box(M.walnut, 0.62, 1.7, 0.035, 0, 0.0, 0, { r: 0.008, rx: -0.09 }); G.mirrors?.add(par, { name: 'leaning', pos: [-42.16 - 0.022, Y + 0.85, 27.9], normal: [-Math.cos(0.09), Math.sin(0.09), 0], quads: [{ w: 0.54, h: 1.6 }], res: 1400, room: { x0: -49.2, x1: -41.8, z0: 20.3, z1: 29.1, y0: Y - 1, y1: Y + 3.8 } });
     F.finish(par, mk, -42.16, Y, 27.9, -Math.PI / 2 + 0.0, { });
     const bk = new Kit(); const wick = pm('rug', { color: 0xb8956a, col2: 0x7a5a38, p: [4, 0.2, 0.2, 0], interior: true });
     bk.lathe(wick, [[0, 0], [0.2, 0], [0.24, 0.05], [0.27, 0.45], [0.28, 0.5], [0.255, 0.5], [0.23, 0.45], [0, 0.05]], 0, 0, 0, { seg: 24 });
@@ -371,7 +389,6 @@ export function buildApartment(scene, ctx) {
         const pw = w - 0.36;
         k.box(dm, pw, mw, 0.018, w / 2, py, zf, { r: 0.004 }); k.box(dm, pw, mw, 0.018, w / 2, py + ph - mw, zf, { r: 0.004 });
         k.box(dm, mw, ph - 2 * mw, 0.018, w / 2 - pw / 2 + mw / 2, py + mw, zf, { r: 0.004 }); k.box(dm, mw, ph - 2 * mw, 0.018, w / 2 + pw / 2 - mw / 2, py + mw, zf, { r: 0.004 });
-        k.box(M.blackMetal, pw - 2 * mw, ph - 2 * mw, 0.002, w / 2, py + mw, fs * (t / 2 + 0.0015), {});          // shadowed recess inside the moulding
       }
     }
     for (const fs of [1, -1]) {                                            // lever handle with a round rose on both faces
@@ -435,7 +452,7 @@ export function buildApartment(scene, ctx) {
   it({ pos: new THREE.Vector3(-38.8, Y + 1.05, 22.1), r: 1.5, maxDist: 2.6, label: () => 'Sit down at the trading desk', act: () => gm().sit?.({ x: -38.8, y: Y + 1.16, z: 23.0, yaw: 0, kind: 'desk' }) });
   // sofa
   it({ pos: new THREE.Vector3(-37.15, Y + 0.6, 27.0), r: 1.4, label: () => 'Sit on the sofa', act: () => gm().sit?.({ x: -37.35, y: Y + 0.98, z: 27.0, yaw: Math.PI / 2 + 0.0, kind: 'sofa' }) });
-  it({ pos: new THREE.Vector3(-38.4, Y + 0.6, 24.8), r: 0.6, label: () => 'Sit in the armchair', act: () => gm().sit?.({ x: -38.4, y: Y + 0.98, z: 24.8, yaw: Math.PI * 0.75, kind: 'chair' }) });
+  it({ pos: new THREE.Vector3(-39.6, Y + 0.6, 29.6), r: 0.6, label: () => 'Sit in the armchair', act: () => gm().sit?.({ x: -39.55, y: Y + 0.98, z: 29.7, yaw: 0.45, kind: 'chair' }) });
   it({ pos: new THREE.Vector3(-38.8, Y + 0.6, 23.05), r: 0.5, label: () => 'Sit at the desk', act: () => gm().sit?.({ x: -38.8, y: Y + 1.02, z: 23.0, yaw: 0, kind: 'desk' }) });
   // kitchen
   it({ pos: K.fridgePos, r: 0.75, label: () => 'Open the fridge', act: () => gm().openFridge?.() });
@@ -455,7 +472,7 @@ export function buildApartment(scene, ctx) {
   // the TV throws coloured light into the room while it is on
   const tvLight = emit({ pos: new THREE.Vector3(-41.2, Y + 1.4, 27.0), color: 0x6a5cff, intensity: 6, distance: 6, on: !!tvScreen.on, priority: 1.2 });
   out.tvLight = tvLight;
-  out.setAllLights = (v) => { for (const g of Object.values(groups)) g.set(v); };
+  out.setAllLights = (v) => { for (const g of Object.values(groups)) g.set(g.name === 'hall' ? true : v); };   // the windowless corridor is always lit
   out.update = (dt, t) => {
     out.updateCurtains(dt);
     tvLight.on = !!tvScreen.on;

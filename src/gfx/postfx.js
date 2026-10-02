@@ -239,7 +239,7 @@ export class PostFX {
   constructor(renderer, q) {
     this.r = renderer;
     this.quad = new FullScreenQuad(null);
-    this.fx = { fade: 0, sat: 1.0, vig: 0.28, grain: 0.022, ca: 0.0035, contrast: 0.22, warm: 0, bloom: 0.07, exposureBias: 1, aoAmt: 0.85, focus: 8, aperture: 1.0, rays: 0.22 };
+    this.fx = { fade: 0, sat: 1.08, vig: 0.26, grain: 0.018, ca: 0.0025, contrast: 0.26, warm: 0, bloom: 0.07, exposureBias: 1, aoAmt: 0.85, focus: 8, aperture: 1.0, rays: 0.22 };
     this.size = new THREE.Vector2(1280, 720);
     this.focus = 8;
     this.first = true;

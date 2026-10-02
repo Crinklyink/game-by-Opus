@@ -21,7 +21,7 @@ vec3 roomPalette(float r){
 
 void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   float seed = vInfo.x, style = vInfo.y, bay = vInfo.z, fh = vInfo.w;
-  vec3 tint = s.alb;                                 // instance colour: glass tint / wall colour
+  vec3 tint = s.alb * (0.82 + 0.36 * fract(seed * 7.31));   // instance colour: glass tint / wall colour, each building a little lighter or darker
   float dist = distance(wp, cameraPosition);
   // ----- roofs (top faces) -----
   if (n.y > 0.5) {
@@ -58,7 +58,7 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   // windows sit back in a reveal: follow the view ray to the recessed glass plane (parallax that moves with the camera)
   vec3 rdv = normalize(wp - cameraPosition);
   float rzv = clamp(-dot(rdv, n), 0.22, 1.0);
-  float recess = (style < 0.5 ? 0.06 : 0.22) * (1.0 - smoothstep(90.0, 300.0, dist));
+  float recess = (style < 0.5 ? 0.06 : 0.22) * mix(1.0, 0.45, smoothstep(90.0, 700.0, dist));   // keep some window depth even far away, so towers never read as flat boxes
   vec2 c2 = vec2(cx, cy) + vec2(dot(rdv, T), rdv.y) * (recess / rzv) / vec2(bay, fh);
   vec2 f2 = fract(c2);
   float sameCell = (floor(c2.x) == cell.x && floor(c2.y) == cell.y) ? 1.0 : 0.0;
@@ -67,8 +67,9 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   float glassVis = inx2 * iny2 * sameCell;
   float win = open * glassVis;
   float reveal = open * (1.0 - glassVis);                 // the side/top faces of the reveal
-  // mullion in the middle of wide bays
+  // mullion in the middle of wide bays; some glass towers have bold projecting vertical fins instead
   float mull = smoothstep(0.012 + fw.x, 0.012, abs(f2.x - 0.5)) * (style < 0.5 ? 1.0 : 0.0);
+  float fins = (style < 0.5 && fract(seed * 13.7) > 0.7) ? smoothstep(0.05 + fw.x, 0.05, min(f.x, 1.0 - f.x)) : 0.0;
   win *= 1.0 - mull;
   float fwM = style < 0.5 ? 0.045 : 0.07;                 // frame width (m)
   float edgeM = min(min(f2.x - lo.x, hi.x - f2.x) * bay, min(f2.y - lo.y, hi.y - f2.y) * fh);
@@ -88,14 +89,21 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
     wall = mix(tint*(0.7+0.5*br), vec3(0.4,0.38,0.35), mortar*0.8);
   } else {
     wall = tint * (0.55 + 0.6*wn) * (0.9 + 0.2*wg);
-    if (style < 0.5) wall = tint * 0.35 * (0.8 + 0.4*wn);      // dark glass spandrel panel
+    if (style < 0.5) {                                          // curtain-wall towers come in three flavours so the skyline isn't one grey glass sheet
+      float flav = fract(seed * 13.7);
+      wall = flav < 0.4 ? (tint * 0.6 + vec3(0.16, 0.16, 0.15)) * (0.85 + 0.3*wn)     // light fritted spandrels: strong floor banding
+           : flav < 0.7 ? tint * 0.35 * (0.8 + 0.4*wn)                                   // dark, seamless glass
+           : vec3(0.42, 0.41, 0.39) * (0.8 + 0.3*wn);                                     // stone-clad spandrels
+    }
   }
   // grime streaks below windows and towards the ground
   float streak = nz(vec3(hc*2.7, wp.y*0.07, seed*9.0)).b;
   wall *= 1.0 - 0.28*smoothstep(0.45, 0.9, streak) * (1.0 - smoothstep(0.0, 90.0, wp.y));
 
   // ----- glass + room -----
-  vec3 glassCol = mix(vec3(0.02,0.03,0.04), tint*0.22, 0.6);
+  // every pane is a slightly different tint and sits a hair out of plane ("oil canning"): the sky reflection breaks into a mosaic instead of a flat sheet
+  float paneR = hash21(vec2(floor(c2.x), floor(c2.y)) + seed*41.0 + faceId);
+  vec3 glassCol = mix(vec3(0.02,0.03,0.04), tint*0.22, 0.6) * (0.75 + 0.5*paneR);
   vec3 emis = vec3(0.0);
   float lit = step(rnd, uLit * (0.55 + 1.1*rnd3*rnd3) * 1.15);       // room lamp on?
   float occupied = step(0.08, rnd2);                                   // some rooms vacant/dark
@@ -173,12 +181,18 @@ void surf(vec3 p, vec3 n, vec3 wp, inout S s){
   vec3 glassS = glassCol;
   s.alb = mix(wallS, glassS, win);
   s.alb = mix(s.alb, vec3(0.045, 0.05, 0.055), frame);
-  s.metal = mix(0.0, 0.58, win); s.metal = mix(s.metal, 0.85, frame);
-  s.rough = mix(0.74 + 0.12 * wg, 0.05, win); s.rough = mix(s.rough, 0.36, frame);
-  s.emis = emis * (1.0 - frame);
-  s.ao = 1.0 - 0.45 * reveal - 0.25 * underSill;
+  s.alb = mix(s.alb, vec3(0.62, 0.62, 0.6) * (0.85 + 0.3 * wn), fins);
+  // glass is mostly dielectric: dark where you look straight in, bright sky where you see it at a grazing angle -> towers get depth and shape
+  s.metal = mix(0.0, 0.22, win); s.metal = mix(s.metal, 0.85, frame); s.metal *= 1.0 - fins;
+  s.rough = mix(0.74 + 0.12 * wg, 0.03 + 0.09 * paneR, win); s.rough = mix(s.rough, 0.36, frame);
+  s.emis = emis * (1.0 - frame) * (1.0 - fins);
+  // street-canyon occlusion: facades get less sky toward the ground, and the lower floors of tall towers read darker -> depth and scale
+  float canyon = mix(0.45, 1.0, smoothstep(0.0, 26.0 + 0.15 * vTop, wp.y));
+  s.ao = (1.0 - 0.45 * reveal - 0.25 * underSill) * canyon;
+  s.alb *= mix(0.78, 1.0, smoothstep(0.0, 18.0, wp.y));
   float relief = 0.006 * (nz(wp * 7.0).r - 0.5) + 0.028 * sillB + 0.022 * slab + 0.03 * pier - 0.1 * reveal + 0.05 * cop * step(style, 3.9) + 0.045 * ledge * step(style, 3.9) - 0.02 * plinth;
-  s.h = relief * fdA * (1.0 - win);
+  float tilt = ((paneR - 0.5) * (f2.x - 0.5) * bay + (hash11(paneR * 91.0) - 0.5) * (f2.y - 0.5) * fh) * 0.035;
+  s.h = relief * fdA * (1.0 - win) + tilt * win * (1.0 - frame);
 }
 `;
 

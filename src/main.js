@@ -139,7 +139,7 @@ async function boot() {
     bakeHeights(); log('city height map:', FAR.boxes, 'buildings');
     if (!q.sdf) return;
     const V = (x, y, z) => new THREE.Vector3(x, y, z), vox = q.sdfVoxel, em = G.emitters;
-    bakeSdf(G.occ, { name: 'apt', min: V(-51, APT_Y - 0.7, 13), max: V(-17, APT_Y + 4.3, 41.5), voxel: vox, emitters: em, floorY: APT_Y, ceilH: CEIL_H, ceilZ0: 20.45, cfg: { bounce: 0.035, floor: 0.005, sun: 0.1 } });
+    bakeSdf(G.occ, { name: 'apt', min: V(-51, APT_Y - 0.7, 13), max: V(-17, APT_Y + 4.3, 41.5), voxel: vox, emitters: em, floorY: APT_Y, ceilH: CEIL_H, ceilZ0: 20.45, cfg: { bounce: 0.04, floor: 0.008, sun: 0.26, sky: 1.75 } });   // a full-height window wall: lots of sky fill by day
     bakeSdf(G.occ, { name: 'lobby', min: V(-54, -0.7, 18.5), max: V(-20, 7.6, 41.5), voxel: vox * 1.3, emitters: em, floorY: 0, cfg: { bounce: 0.05, floor: 0.02, sun: 0.4 } });
     bakeSdf(G.occ, { name: 'burger', min: V(16, -0.7, -38), max: V(54, 6.2, -10), voxel: vox * 1.3, emitters: em, floorY: 0, cfg: { bounce: 0.11, floor: 0.15, sun: 0.25 } });
     bakeSdf(G.occ, { name: 'grocery', min: V(16, -0.7, 10), max: V(66, 7.4, 44), voxel: vox * 1.45, emitters: em, floorY: 0, cfg: { bounce: 0.085, floor: 0.11, sun: 0.25 } });

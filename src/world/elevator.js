@@ -60,27 +60,39 @@ export function buildElevator(scene, opts = {}) {
   k.box(M.plasticW, HW * 2 + 0.1, 0.06, D1 - D0 + 0.1, 0, H, (D0 + D1) / 2);
   // back mirror (upper) + steel dado
   k.box(M.blackMetal, HW * 2, H - 0.95, 0.02, 0, 0.9, D1 + 0.01);
-  G.mirrors?.add(cab, { name: 'cab', pos: [0, 0.9 + (H - 0.95) / 2, D1 - 0.002], normal: [0, 0, -1], quads: [{ w: HW * 2, h: H - 0.95 }], res: 1024, dynamic: true });
+  G.mirrors?.add(cab, { name: 'cab', pos: [0, 0.9 + (H - 0.95) / 2, D1 - 0.002], normal: [0, 0, -1], quads: [{ w: HW * 2, h: H - 0.95 }], res: 1400, dynamic: true });
   k.box(seam, HW * 2, 0.9, 0.03, 0, 0, D1 + 0.015);
   k.box(M.brass, HW * 2, 0.03, 0.05, 0, 0.9, D1 - 0.005);
   // handrail
   k.cyl(M.brass, 0.018, 0.018, HW * 1.6, 0, 0.95, D1 - 0.1, { rz: Math.PI / 2, cy: true, seg: 12 });
   for (const s of [-1, 1]) k.cyl(M.brass, 0.012, 0.012, 0.1, s * HW * 0.78, 0.95, D1 - 0.05, { rx: Math.PI / 2, cy: true, seg: 8 });
-  // side walls: walnut left, steel right (with button panel)
-  k.box(M.walnutV, 0.04, H, D1 - D0, -HW - 0.02, 0, (D0 + D1) / 2);
-  k.box(seam, 0.04, H, D1 - D0, HW + 0.02, 0, (D0 + D1) / 2);
-  for (const zz of [0.7, 1.4]) { k.box(M.brass, 0.008, H - 0.1, 0.012, -HW + 0.002, 0.05, zz); }
-  // button panel on right wall
-  k.box(M.blackMetal, 0.02, 0.95, 0.24, HW - 0.005, 0.95, 0.5, { r: 0.004 });
-  const btnOff = pm('plain', { color: 0x444, rough: 0.3, interior: true });
-  for (let r = 0; r < 6; r++) for (let c = 0; c < 2; c++) k.cyl(M.chrome, 0.018, 0.018, 0.012, HW - 0.02, 1.0 + r * 0.14, 0.44 + c * 0.1, { rz: Math.PI / 2, cy: true, seg: 12 });
+  // side walls: brushed-steel dado, then three framed walnut panels per side with dark reveals and a brass reveal line
+  const reveal = pm('plain', { color: 0x0c0b0a, rough: 0.6, interior: true });
+  const wood = pm('woodfurn', { color: 0x4e3020, col2: 0x24150b, p: [1, 0, 0, 0], interior: true, physical: true, clearcoat: 0.45, ccRough: 0.3 });   // vertical-grain walnut
+  for (const sx of [-1, 1]) {
+    const wx = sx * (HW + 0.02);
+    k.box(reveal, 0.04, H, D1 - D0, wx, 0, (D0 + D1) / 2);                                                  // carcass (shows in the reveals)
+    k.box(seam, 0.03, 0.88, D1 - D0 - 0.02, wx - sx * 0.008, 0.02, (D0 + D1) / 2, { r: 0.004 });               // steel dado
+    k.box(M.brass, 0.012, 0.022, D1 - D0 - 0.02, wx - sx * 0.026, 0.9, (D0 + D1) / 2);                        // brass reveal line
+    const pz0 = D0 + 0.04, pz1 = D1 - 0.04, n = 3, pw = (pz1 - pz0) / n;
+    for (let i = 0; i < n; i++) k.box(wood, 0.03, H - 0.95 - 0.08, pw - 0.014, wx - sx * 0.01, 0.93, pz0 + pw * (i + 0.5), { r: 0.006, seg: 2 });
+  }
+  // button panel on the right wall: brushed steel plate with a floor display and lit rings
+  k.box(seam, 0.012, 0.62, 0.2, HW - 0.016, 0.92, 0.42, { r: 0.006 });
+  for (let r = 0; r < 6; r++) for (let c = 0; c < 2; c++) k.cyl(M.chrome, 0.017, 0.017, 0.01, HW - 0.026, 1.0 + r * 0.085, 0.38 + c * 0.08, { rz: Math.PI / 2, cy: true, seg: 14 });
   const btnGlowMat = pm('plain', { color: 0x000000, emissive: 0xffb347, emissiveI: 3, interior: true });
-  k.cyl(btnGlowMat, 0.011, 0.011, 0.014, HW - 0.024, 1.0 + 5 * 0.14, 0.44, { rz: Math.PI / 2, cy: true, seg: 10 });   // "48" lit
-  k.cyl(btnGlowMat, 0.011, 0.011, 0.014, HW - 0.024, 1.0, 0.44, { rz: Math.PI / 2, cy: true, seg: 10 });            // "L" lit
-  // ceiling panel
-  const panel = pm('plain', { color: 0x050505, emissive: 0xfff0dc, emissiveI: 3.2, interior: true });
-  k.box(panel, 1.5, 0.02, 1.3, 0, H - 0.03, 1.1);
-  k.box(M.brass, 1.56, 0.02, 1.36, 0, H - 0.05, 1.1);
+  k.cyl(btnGlowMat, 0.019, 0.019, 0.006, HW - 0.024, 1.0 + 5 * 0.085, 0.38, { rz: Math.PI / 2, cy: true, seg: 14 });   // "48" ring lit
+  k.cyl(btnGlowMat, 0.019, 0.019, 0.006, HW - 0.024, 1.0, 0.38, { rz: Math.PI / 2, cy: true, seg: 14 });               // "L" ring lit
+  // ceiling: dark bronze with six recessed downlights and a warm cove line around the edge
+  const panel = pm('plain', { color: 0x050505, emissive: 0xfff2e2, emissiveI: 5, interior: true });
+  const cove = pm('plain', { color: 0x050505, emissive: 0xffd9a8, emissiveI: 2.2, interior: true });
+  k.box(pm('metal', { color: 0x3a3028, p: [1, 140, 0, 0], interior: true }), HW * 2 - 0.12, 0.02, D1 - D0 - 0.12, 0, H - 0.02, (D0 + D1) / 2);
+  for (const sx of [-1, 1]) k.box(cove, 0.012, 0.01, D1 - D0 - 0.14, sx * (HW - 0.07), H - 0.025, (D0 + D1) / 2);
+  for (const sz of [-1, 1]) k.box(cove, HW * 2 - 0.14, 0.01, 0.012, 0, H - 0.025, (D0 + D1) / 2 + sz * ((D1 - D0) / 2 - 0.07));
+  for (const lx of [-0.45, 0.45]) for (const lz of [0.5, 1.1, 1.7]) {
+    k.cyl(M.chrome, 0.05, 0.05, 0.008, lx, H - 0.03, lz, { seg: 20 });
+    k.cyl(panel, 0.035, 0.035, 0.01, lx, H - 0.034, lz, { seg: 20 });
+  }
   // header above door + door track
   k.box(M.steel, HW * 2 + 0.1, H - OH, 0.1, 0, OH, D0 - 0.02);
   k.box(M.steel, HW * 2 + 0.12, 0.04, 0.08, 0, 0.0, D0 - 0.02);
@@ -93,7 +105,7 @@ export function buildElevator(scene, opts = {}) {
   const dg = { '-1': new THREE.Group(), '1': new THREE.Group() };
   cab.add(dg['-1'], dg['1']);
   for (const s of [-1, 1]) { dg[s].position.set(0, 0, D0); const dk = new Kit(); dk.box(seam, OW / 2, OH, 0.05, s * OW / 4, 0, 0, { r: 0.003 }); leafDetail(dk, M, s * OW / 4, OW / 2, OH, 0.05, 1); dk.box(M.brass, 0.01, OH - 0.1, 0.055, s * 0.005, 0.05, 0); dk.mesh(dg[s], {}); }
-  const cabLight = LightPool.add({ pos: new THREE.Vector3(XC, LEVEL_Y[1] + 2.4, ZD + 1.1), color: 0xffe9cc, intensity: 45, distance: 5.5, priority: 2, zone: 'elevator' });
+  const cabLight = LightPool.add({ pos: new THREE.Vector3(XC, LEVEL_Y[1] + 2.4, ZD + 1.1), color: 0xfff0dc, intensity: 34, distance: 5.5, priority: 2, zone: 'elevator' });
 
   // ---------------- landings (frames, doors, indicators, call buttons) ----------------
   const landings = [];

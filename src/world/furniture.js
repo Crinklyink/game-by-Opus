@@ -3,7 +3,7 @@
 // returns handles. Dimensions are in metres and roughly match real products.
 import * as THREE from 'three';
 import { Kit, addCollider, leafGeometry, mat4 } from './kit.js';
-import { cushion, throwPillow, leanPillow, turnedLeg, rrShape, rrPath, bookStack, mug, plate, stemGlass, branchVase, throwHeight, slats, flutes } from './shapes.js';
+import { cushion, throwPillow, leanPillow, turnedLeg, rrShape, rrPath, bookStack, mug, plate, stemGlass, branchVase, slats, flutes } from './shapes.js';
 import { palette } from './palette.js';
 import { canvasTex } from '../gfx/noise.js';
 import { pm } from '../gfx/materials.js';
@@ -56,7 +56,18 @@ export function sofa(par, y0, x, z, ry, o = {}) {
   leanPillow(k, M.rust, 0.5, 0.15, 0.5, -W / 2 + 0.55, 0.14, SY, 0.5, { ry: 0.4 });
   leanPillow(k, M.sage, 0.42, 0.13, 0.42, -W / 2 + 0.9, 0.3, SY, 0.4, { ry: -0.3 });
   leanPillow(k, M.navy, 0.5, 0.14, 0.5, W / 2 - 0.55, 0.14, SY, 0.5, { ry: -0.35 });
-  k.cloth(M.mustard, 0.6, 0.85, W / 2 - 1.05, 0.5, 0.04, throwHeight(2), { sw: 28, sh: 34, ry: 0.1 });
+  // knit throw folded on the right seat and draped over the rolled arm: a heightfield that follows seat -> arm top -> outside face
+  { const x0 = W / 2 - 0.62, x1 = W / 2 + 0.03, sm = (a, b, t) => { const q = Math.min(1, Math.max(0, (t - a) / (b - a))); return q * q * (3 - 2 * q); };
+    const armC = W / 2 - 0.1, armR = 0.118;
+    k.cloth(M.mustard, x1 - x0, 0.52, (x0 + x1) / 2, 0, 0.12, (u, v) => {
+      const x = x0 + u * (x1 - x0);
+      const seat = 0.512, dx = x - armC;
+      const arm = Math.abs(dx) < armR ? 0.6 + Math.sqrt(armR * armR - dx * dx) : -1;           // over the round top of the arm
+      const drop = dx > 0.06 ? 0.71 - (dx - 0.06) * 6.0 : -1;                                  // hanging down the outside
+      let y = Math.max(seat + 0.01 * sm(0.4, 0.0, u), arm + 0.008, dx > 0.06 ? Math.max(drop, 0.33) : -1);
+      y = Math.max(y, seat + 0.012) + 0.006 * Math.sin(v * 19 + u * 4) * sm(0.0, 0.3, u);
+      return y;
+    }, { sw: 60, sh: 24 }); }
   const g = finish(par, k, x, y0, z, ry);
   colBox(x, z, W, D, ry, y0, y0 + 0.9);
   return g;

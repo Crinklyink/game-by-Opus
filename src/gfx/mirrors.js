@@ -88,7 +88,7 @@ export class MirrorSystem {
     const w = asp >= 1 ? long : Math.max(128, Math.round(long * asp)), h = asp >= 1 ? Math.max(128, Math.round(long / asp)) : long;
     if (m.rt && m.rt.width === w && m.rt.height === h) return;
     if (m.rt) m.rt.dispose();
-    m.rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true, samples: 0, generateMipmaps: false });
+    m.rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true, samples: this.scale >= 0.8 ? 4 : 0, generateMipmaps: false });   // MSAA: mirrors are seen up close
     m.mat.uniforms.tMirror.value = m.rt.texture;
     m.mat.uniforms.uTexel.value.set(1 / w, 1 / h);
   }
