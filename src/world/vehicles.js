@@ -523,7 +523,7 @@ export class CarType {
   set(i, m, spin, steer, opts) { m.toArray(this.mats, i * 16); this.spin[i] = spin; this.steer[i] = steer; this.hasDriver[i] = opts && opts.driver ? 1 : 0; }
   setColor(i, hex) { const c = this._c.set(hex); this.col[i * 3] = c.r; this.col[i * 3 + 1] = c.g; this.col[i * 3 + 2] = c.b; }
   setLights(i, head, tail, brake) { this.lamps[i * 3] = head; this.lamps[i * 3 + 1] = tail; this.lamps[i * 3 + 2] = brake; }
-  setSign(i, on) { this.signOn[i] = on ? 1 : 0.2; }
+  setSign(i, on) { this.signOn[i] = on ? 1 : 0; }
   setPlate(i, cell) { this.plateSrc[i * 2] = cell % 4; this.plateSrc[i * 2 + 1] = Math.floor(cell / 4) % 4; }
 
   // cull (distance + frustum, generous near the player so shadows stay right), then write the visible cars densely into the instance buffers
@@ -544,7 +544,8 @@ export class CarType {
         if (d2 > 70 * 70) { this._sp.set(this._v.set(x, y + 0.8, z), radius + 1.5); if (!this._fr.intersectsSphere(this._sp)) continue; }
       }
       m.fromArray(this.mats, o);
-      for (const key of CAR_MESHES) { const im = M[key]; if (im) im.setMatrixAt(k, m); }
+      for (const key of CAR_MESHES) { const im = M[key]; if (im && key !== 'sign') im.setMatrixAt(k, m); }
+      if (M.sign) M.sign.setMatrixAt(k, this.signOn[i] > 0.5 ? m : this._z);   // only taxis carry the roof sign
       M.plate.setMatrixAt(k, m);
       if (this.hasDriver[i]) M.driver.setMatrixAt(k, m); else M.driver.setMatrixAt(k, this._z);
       // contact shadow

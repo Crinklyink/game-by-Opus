@@ -1,6 +1,6 @@
 // Headless screenshot harness (software GL). Usage:
 //   node tools/shot.mjs "<query>" out.png [frames] [width] [height]
-import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { launch } from './browser.mjs';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,7 +18,7 @@ await new Promise((r) => server.listen(0, r));
 const port = server.address().port;
 fs.mkdirSync(path.dirname(out), { recursive: true });
 
-const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--use-gl=angle', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl', '--disable-gpu-sandbox', '--no-sandbox'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: +W, height: +H } });
 const logs = [];
 page.on('console', (m) => { const t = m.text(); if (m.type() === 'error' || m.type() === 'warning' || t.includes('[floor48]')) logs.push(`[${m.type()}] ${t}`); });

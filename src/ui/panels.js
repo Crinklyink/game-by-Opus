@@ -249,7 +249,7 @@ export function openSettings(game, fromTitle = false) {
     <h2>Settings</h2><div class="sub">GPU: ${G.gpu?.renderer?.replace(/ANGLE \(|\)/g, '').slice(0, 64) || 'unknown'} · detected tier: <b>${G.gpu?.tier}</b>${G.gpu?.software ? ' (software renderer — no GPU found!)' : ''}</div>
     <h3>Graphics</h3>
     <div class="grid" style="grid-template-columns:200px 1fr;align-items:center;gap:10px 16px">
-      <span>Quality preset</span><select id="s-q">${['auto', 'low', 'medium', 'high', 'ultra'].map((k) => `<option value="${k}" ${st.quality === k ? 'selected' : ''}>${k === 'auto' ? `Auto (${G.gpu?.tier})` : k[0].toUpperCase() + k.slice(1)}</option>`).join('')}</select>
+      <span>Quality preset</span><select id="s-q">${['auto', 'low', 'medium', 'high', 'ultra'].map((k) => `<option value="${k}" ${st.quality === k ? 'selected' : ''}>${k === 'auto' ? `Auto (${G.gpu?.auto || G.gpu?.tier})` : k[0].toUpperCase() + k.slice(1)}</option>`).join('')}</select>
       <span>Render resolution <b id="v-res">${Math.round(st.res * 100)}%</b></span><input type="range" id="s-res" min="50" max="100" value="${Math.round(st.res * 100)}">
       <span>Dynamic resolution</span><select id="s-dyn"><option value="1" ${st.dyn ? 'selected' : ''}>On (keeps 60 fps)</option><option value="0" ${!st.dyn ? 'selected' : ''}>Off</option></select>
       <span>Field of view <b id="v-fov">${st.fov}°</b></span><input type="range" id="s-fov" min="60" max="100" value="${st.fov}">

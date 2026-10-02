@@ -7,11 +7,19 @@ buy groceries, cook at home, and (as a small side hobby) trade a few fictional s
 Everything you see and hear is generated in code - no textures, models or audio files - rendered with custom
 WebGL2 shaders (three.js).
 
-## Play (easiest)
+## Play (desktop app, recommended)
 
-**Double-click `dist/floor48.html`** (Chrome or Edge recommended). That's it - it's one self-contained file.
+```
+npm install        # once
+npm run package    # builds release/Floor48-win32-x64/Floor48.exe  (a standalone app, no browser needed)
+```
+Then run `Floor48.exe` (or just double-click `play-app.bat`, which builds it the first time). `npm run app` runs it straight from source.
+The app is a stripped-down Chromium window with every GPU path forced on (GPU blocklist ignored, ANGLE/D3D11, GPU rasterisation,
+discrete-GPU preference, no background throttling). **F11** or **Alt+Enter** toggles fullscreen.
 
-Or run it from source:
+## Play in a browser
+
+**Double-click `dist/floor48.html`** (Chrome or Edge). It's one self-contained file. Or from source:
 
 ```
 node serve.mjs          # then open http://localhost:8080
@@ -21,7 +29,9 @@ node serve.mjs          # then open http://localhost:8080
 ## Using your GPU
 
 The game requests the *high-performance* GPU from the browser and picks a graphics preset from your actual GPU
-(Low / Medium / High / Ultra). You can change it in **Esc -> Settings**. A dynamic-resolution scaler keeps ~60 fps.
+(Low / Medium / High / Ultra; Auto tops out at High, Ultra is opt-in). You can change it in **Esc -> Settings**.
+Each preset has a pixel budget, so 4K / high-DPI screens render at a capped internal resolution and are upscaled instead of
+quadrupling the cost, and a dynamic-resolution scaler keeps ~60 fps.
 
 If you have a laptop with two GPUs and it looks slow: make sure the browser is set to use the **discrete GPU**
 (Windows: Settings -> System -> Display -> Graphics -> add Chrome/Edge -> *High performance*), and that

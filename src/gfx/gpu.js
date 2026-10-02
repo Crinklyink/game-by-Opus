@@ -44,25 +44,27 @@ export function prettyGPU(r) {
 // Every knob the renderer honours. `res` is the starting internal resolution scale.
 export const PRESETS = {
   low: {
-    id: 'low', name: 'Low', res: 0.72, dprCap: 1, msaa: 0, ao: 0, aoTaps: 0, dof: 0, bloom: 1, bloomLevels: 4, shadow: 1024, shadowExtent: 45,
+    id: 'low', name: 'Low', maxPixels: 1.3e6, res: 0.72, dprCap: 1, msaa: 0, ao: 0, aoTaps: 0, dof: 0, bloom: 1, bloomLevels: 4, shadow: 1024, shadowExtent: 45,
     lights: 6, spots: 0, sdf: 1, sdfVoxel: 0.2, sdfTaps: 3, sdfSteps: 10, sdfLights: 0, sdfSpots: 0, sdfAO: 0.85, planar: 0, probe: 0, interiorMap: 0, glass: 0, godrays: 0, traffic: 0.55, peds: 0.5, rain: 900, aniso: 2, fxaa: 1, streetDetail: 0.6, cloudQuality: 0, foliage: 0.3,
   },
   medium: {
-    id: 'medium', name: 'Medium', res: 0.9, dprCap: 1.25, msaa: 2, ao: 1, aoTaps: 8, dof: 0, bloom: 1, bloomLevels: 5, shadow: 2048, shadowExtent: 55,
+    id: 'medium', name: 'Medium', maxPixels: 2.4e6, res: 0.9, dprCap: 1.25, msaa: 2, ao: 1, aoTaps: 8, dof: 0, bloom: 1, bloomLevels: 5, shadow: 2048, shadowExtent: 55,
     lights: 8, spots: 3, sdf: 1, sdfVoxel: 0.16, sdfTaps: 4, sdfSteps: 12, sdfLights: 1, sdfSpots: 0, sdfAO: 0.9, planar: 0.4, probe: 1, interiorMap: 0, glass: 1, godrays: 0, traffic: 0.8, peds: 0.75, rain: 2200, aniso: 4, fxaa: 0, streetDetail: 0.8, cloudQuality: 1, foliage: 0.6,
   },
   high: {
-    id: 'high', name: 'High', res: 1, dprCap: 1.5, msaa: 4, ao: 1, aoTaps: 12, dof: 1, bloom: 1, bloomLevels: 6, shadow: 4096, shadowExtent: 60,
+    id: 'high', name: 'High', maxPixels: 3.8e6, res: 1, dprCap: 1.5, msaa: 4, ao: 1, aoTaps: 12, dof: 1, bloom: 1, bloomLevels: 6, shadow: 4096, shadowExtent: 60,
     lights: 12, spots: 6, sdf: 1, sdfVoxel: 0.15, sdfTaps: 5, sdfSteps: 16, sdfLights: 2, sdfSpots: 1, sdfAO: 1, planar: 0.5, probe: 1, interiorMap: 1, glass: 1, godrays: 1, traffic: 1, peds: 1, rain: 4500, aniso: 8, fxaa: 0, streetDetail: 1, cloudQuality: 2, foliage: 1,
   },
   ultra: {
-    id: 'ultra', name: 'Ultra', res: 1, dprCap: 2, msaa: 4, ao: 1, aoTaps: 16, dof: 1, bloom: 1, bloomLevels: 6, shadow: 4096, shadowExtent: 70,
+    id: 'ultra', name: 'Ultra', maxPixels: 5.2e6, res: 1, dprCap: 2, msaa: 4, ao: 1, aoTaps: 16, dof: 1, bloom: 1, bloomLevels: 6, shadow: 4096, shadowExtent: 70,
     lights: 16, spots: 10, sdf: 1, sdfVoxel: 0.15, sdfTaps: 6, sdfSteps: 20, sdfLights: 3, sdfSpots: 2, sdfAO: 1, planar: 0.75, probe: 1, interiorMap: 1, glass: 1, godrays: 1, traffic: 1, peds: 1, rain: 7000, aniso: 16, fxaa: 0, streetDetail: 1, cloudQuality: 2, foliage: 1.3,
   },
 };
 
 export function pickPreset(gpu, override) {
-  const key = override && override !== 'auto' ? override : gpu.tier;
+  // 'auto' never picks Ultra: it costs ~30% more than High for little visible gain; it stays an explicit choice in Settings
+  gpu.auto = gpu.tier === 'ultra' ? 'high' : gpu.tier;
+  const key = override && override !== 'auto' ? override : gpu.auto;
   const p = { ...(PRESETS[key] || PRESETS.medium) };
   p.msaa = Math.min(p.msaa, gpu.maxSamples || 0);
   if (!gpu.floatRT) { p.msaa = 0; p.ao = 0; p.dof = 0; }

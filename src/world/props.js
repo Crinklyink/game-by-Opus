@@ -65,8 +65,8 @@ VERT.leaves = windHook(true);
 
 // 2x2 atlas of leafy twigs, painted procedurally (alpha = leaf shapes, rgb = veins / tonal variation)
 function makeLeafAtlas() {
-  return canvasTex(512, 512, (c, w, h) => {
-    c.clearRect(0, 0, w, h);
+  return canvasTex(1024, 1024, (c, w, h) => {
+    c.clearRect(0, 0, w, h); c.scale(w / 512, h / 512);       // drawn on a 512 grid, rendered at 2x so leaf edges stay crisp up close
     const RR = rng(90210);
     const leaf = (x, y, ang, len, wid, tone) => {
       c.save(); c.translate(x, y); c.rotate(ang);
@@ -97,7 +97,7 @@ function makeLeafAtlas() {
       }
       leaf(bx, oy + 30, -Math.PI / 2 + (RR() - 0.5) * 0.4, 62, 17, RR());       // terminal leaf
     }
-  }, { srgb: true, aniso: 4 });
+  }, { srgb: true, aniso: 8 });
 }
 
 // leaf cards scattered over the crown blobs (same layout for every tree: the whole crown is one shared geometry)

@@ -51,7 +51,7 @@ async function boot() {
   const settings = loadSettings();
   const qKey = params.get('q') || settings.quality || 'auto';
   const q = pickPreset(gpu, qKey);
-  for (const key of ['sdfLights', 'sdfSpots', 'sdfTaps', 'sdfSteps', 'spots', 'lights']) if (params.has(key)) q[key] = +params.get(key);   // test overrides
+  for (const [key, val] of params) if (key !== 'q' && typeof q[key] === 'number' && val !== '' && !isNaN(+val)) q[key] = +val;   // tuning overrides: any numeric preset knob, e.g. ?aoTaps=0&msaa=2
   G.q = q; G.qKey = qKey;
   log('GPU:', gpu.renderer, '| tier:', gpu.tier, '| preset:', q.id, '| msaa:', q.msaa);
   ui.setLoading(0.02, 'Warming up the GPU');
@@ -106,7 +106,9 @@ async function boot() {
     renderer.setSize(w, h, false);
     if (params.has('w')) { canvas.style.width = w + 'px'; canvas.style.height = h + 'px'; } else { canvas.style.width = '100%'; canvas.style.height = '100%'; }
     camera.aspect = w / h; camera.updateProjectionMatrix();
-    post.resize(w, h, scale);
+    // pixel budget: a 4K / high-DPI display must not silently quadruple the shading cost
+    const eff = Math.min(scale, Math.sqrt(q.maxPixels / (w * h)));
+    post.resize(w, h, eff);
     planar.resize(post.size.x, post.size.y);
   };
   resize();
@@ -244,9 +246,10 @@ async function boot() {
     if (fpsAcc >= 0.5) {
       const ms = (fpsAcc / fpsN) * 1000; fpsShow = 1000 / ms;
       if (dyn && frames > 90) {
-        if (ms > 21) { slow++; fast = 0; } else if (ms < 12.5) { fast++; slow = 0; } else { slow = 0; fast = 0; }
-        if (slow >= 3 && scale > 0.6) { scale = Math.max(0.6, scale - 0.05); slow = 0; resize(); }
-        if (fast >= 8 && scale < maxScale) { scale = Math.min(maxScale, scale + 0.05); fast = 0; resize(); }
+        if (ms > 18.2) { slow++; fast = 0; } else if (ms < 12.5) { fast++; slow = 0; } else { slow = 0; fast = 0; }
+        const over = Math.max(1, ms / 16.7);                                          // how far over the 60 fps budget (pixel cost ~ scale^2)
+        if (slow >= 2 && scale > 0.5) { scale = Math.max(0.5, scale * Math.max(0.8, 1 / Math.sqrt(over)) - 0.01); slow = 0; resize(); }
+        if (fast >= 10 && scale < maxScale) { scale = Math.min(maxScale, scale + 0.04); fast = 0; resize(); }
       }
       if (game.settings.fps) ui.perf(`${fpsShow.toFixed(0)} fps  ${ms.toFixed(1)} ms\n${prettyGPU(gpu.renderer)}\npreset ${q.id}  scale ${Math.round(scale * 100)}%\ncalls ${renderer.info.render.calls}  tris ${(renderer.info.render.triangles / 1000).toFixed(0)}k`);
       fpsAcc = 0; fpsN = 0;

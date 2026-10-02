@@ -6,10 +6,18 @@
   "type": "module",
   "scripts": {
     "start": "node serve.mjs",
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "app": "electron .",
+    "app:dev": "electron . --enable-logging",
+    "package": "node package.mjs"
   },
   "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "^44.5.1",
     "esbuild": "^0.24.0",
+    "playwright-core": "^1.63.0",
     "three": "0.170.0"
-  }
+  },
+  "main": "electron/main.cjs",
+  "productName": "Floor 48"
 }

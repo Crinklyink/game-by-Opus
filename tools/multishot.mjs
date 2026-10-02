@@ -1,7 +1,7 @@
 // Several screenshots from ONE page load (shader compile + world build are the slow part in software GL).
 // Usage: node tools/multishot.mjs "<query>" outPrefix '<json list>' [width] [height]
 //   list item: { name, cam:[x,y,z,yaw,pitch], t:hour, lights:true|false, rain:0..1, frames:n, eval:"js", fov:deg }
-import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { launch } from './browser.mjs';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,7 +20,7 @@ await new Promise((r) => server.listen(0, r));
 const port = server.address().port;
 fs.mkdirSync(path.dirname(prefix), { recursive: true });
 
-const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--use-gl=angle', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl', '--disable-gpu-sandbox', '--no-sandbox'] });
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: +W, height: +H } });
 const logs = [];
 page.on('console', (m) => { const t = m.text(); if (m.type() === 'error' || m.type() === 'warning' || t.includes('[floor48]')) logs.push(`[${m.type()}] ${t}`); });
