@@ -1,4 +1,4 @@
-# FLOOR 48
+# Larper 48
 
 *A quiet life above the city.* A detailed first-person 3D life sim: you're a day trader living on the 48th floor of Meridian Tower.
 Watch the skyline and the weather from a floor-to-ceiling window wall, ride the elevator down, grab a burger,
