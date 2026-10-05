@@ -52,7 +52,7 @@ vec3 bumpN(vec3 pos, vec3 N, vec2 dH, float fd){
 // (sky visibility through the windows) and add contact AO, SDF soft shadows on the strongest pooled
 // lights and a wrap-lit bounce from every pooled light. See gfx/sdf.js.
 const rep = (src, from, to, tag) => {
-  if (!src.includes(from)) { console.error('[floor48] shader chunk patch missed:', tag); return src; }
+  if (!src.includes(from)) { console.error('[larper48] shader chunk patch missed:', tag); return src; }
   return src.replace(from, to);
 };
 let _lightsBegin = null, _lightsBase = null, _lightsMaps = null;

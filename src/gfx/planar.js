@@ -22,9 +22,11 @@ export class PlanarReflection {
 
   resize(w, h) {
     const s = this.q.planar || 0;
-    if (this.rt) { this.rt.dispose(); this.rt = null; }
-    if (!s) return;
     const rw = Math.max(64, Math.round(w * s)), rh = Math.max(64, Math.round(h * s));
+    if (s && this.rt?.width === rw && this.rt?.height === rh) return;
+    if (this.rt) { this.rt.dispose(); this.rt = null; }
+    this.uniforms.tPlanar.value = null;
+    if (!s) return;
     this.rt = new THREE.WebGLRenderTarget(rw, rh, { type: THREE.HalfFloatType, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: true, depthBuffer: true, samples: 0 });
     this.uniforms.tPlanar.value = this.rt.texture;
   }
@@ -59,14 +61,18 @@ export class PlanarReflection {
     q.w = (1.0 + pm.elements[10]) / pm.elements[14];
     clip.multiplyScalar(2.0 / clip.dot(q));
     pm.elements[2] = clip.x; pm.elements[6] = clip.y; pm.elements[10] = clip.z + 1.0 - 0.003; pm.elements[14] = clip.w;
+    cam.projectionMatrixInverse.copy(pm).invert();
 
     const r = this.r;
     const prev = r.getRenderTarget(), au = r.shadowMap.autoUpdate;
     r.shadowMap.autoUpdate = false;
-    r.setRenderTarget(this.rt);
-    r.clear();
-    r.render(scene, cam);
-    r.setRenderTarget(prev);
-    r.shadowMap.autoUpdate = au;
+    try {
+      r.setRenderTarget(this.rt);
+      r.clear();
+      r.render(scene, cam);
+    } finally {
+      r.setRenderTarget(prev);
+      r.shadowMap.autoUpdate = au;
+    }
   }
 }

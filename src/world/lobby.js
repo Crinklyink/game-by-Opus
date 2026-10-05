@@ -9,7 +9,7 @@ import { LightPool } from '../gfx/lights.js';
 import { Interact } from '../systems/interact.js';
 import { canvasTex } from '../gfx/noise.js';
 import * as F from './furniture.js';
-import { LOBBY_H } from './consts.js';
+import { LOBBY_H, SHAFT } from './consts.js';
 
 const X0 = -52, X1 = -22, Z0 = 20.4, Z1 = 36.4, H = LOBBY_H;
 
@@ -151,7 +151,11 @@ export function buildLobby(scene, ctx) {
   // the rest of the tower's ground floor is solid mass around the lobby
   addCollider(-60, X0 - 0.3, 20, 60, -1, H + 1, 0);
   addCollider(X1 + 0.3, -20, 20, 60, -1, H + 1, 0);
-  addCollider(-60, -20, Z1 + 0.3, 60, -1, H + 1, 0);
+  // Leave the elevator shaft clear. A single rear mass overlapped the cab and
+  // pushed riders through the landing doors as soon as movement unlocked.
+  addCollider(-60, SHAFT.x0, Z1 + 0.3, 60, -1, H + 1, 0);
+  addCollider(SHAFT.x1, -20, Z1 + 0.3, 60, -1, H + 1, 0);
+  addCollider(SHAFT.x0, SHAFT.x1, SHAFT.z1, 60, -1, H + 1, 0);
   const transom = new THREE.Mesh(new THREE.PlaneGeometry(dx1 - dx0 + 0.2, H - 3.5 - 0.5), glassMat);
   transom.position.set(-40, 3.5 + (H - 3.5 - 0.5) / 2 + 0.1, Z0 - 0.02); par.add(transom);
   // sliding doors: two glass leaves

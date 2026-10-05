@@ -1,0 +1,2 @@
+# Bundled vendor GLSL contains upstream trailing spaces. Review the sources instead.
+dist/*.html linguist-generated=true whitespace=-blank-at-eol

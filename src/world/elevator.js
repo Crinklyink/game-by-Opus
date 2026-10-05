@@ -9,9 +9,9 @@ import { LightPool } from '../gfx/lights.js';
 import { Interact } from '../systems/interact.js';
 import { makeScreen } from './screens.js';
 import { APT_Y } from './consts.js';
-import { canvasTex } from '../gfx/noise.js';
+import { createElevatorMotion, ELEVATOR } from './elevator-motion.js';
 
-const XC = -26, ZD = 36.4, OW = 2.2, OH = 2.45;
+const XC = ELEVATOR.x, ZD = ELEVATOR.z, OW = 2.2, OH = 2.45;
 const LEVEL_Y = [0, APT_Y];
 
 function drawFloor(ctx, w, h, t, s) {
@@ -42,10 +42,13 @@ function leafDetail(dk, M, cx, w, h, t, dir) {
 
 export function buildElevator(scene, opts = {}) {
   const M = palette();
-  const E = {
-    level: 1, doors: 0, moving: false, busy: false, y: LEVEL_Y[1], travelT: 0, from: 1, to: 1,
-    displayText: '48',
-  };
+  const E = createElevatorMotion({
+    player: () => G.player,
+    position: (y) => { cab.position.y = y; cabLight.pos.y = y + 2.4; },
+    display: (text, arrow) => E.setDisplays(text, arrow),
+    ding: () => G.audio?.ding?.(), start: () => G.audio?.elevatorStart?.(),
+    stop: () => G.audio?.elevatorStop?.(), toast: (text) => G.game?.toast?.(text),
+  });
 
   // ---------------- cab ----------------
   const cab = new THREE.Group();
@@ -96,7 +99,7 @@ export function buildElevator(scene, opts = {}) {
   // header above door + door track
   k.box(M.steel, HW * 2 + 0.1, H - OH, 0.1, 0, OH, D0 - 0.02);
   k.box(M.steel, HW * 2 + 0.12, 0.04, 0.08, 0, 0.0, D0 - 0.02);
-  k.mesh(cab, { cast: true, receive: true });
+  k.mesh(cab, { cast: true, receive: true, occ: false });
   // floor indicator inside
   const inDisp = makeScreen(256, 128, drawFloor, { fps: 8 }); inDisp.text = '48'; inDisp.visible = true; inDisp.level = 1.3;
   const inMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.21), inDisp.mat);
@@ -104,7 +107,7 @@ export function buildElevator(scene, opts = {}) {
   // cab door panels (two) sliding sideways along z = D0
   const dg = { '-1': new THREE.Group(), '1': new THREE.Group() };
   cab.add(dg['-1'], dg['1']);
-  for (const s of [-1, 1]) { dg[s].position.set(0, 0, D0); const dk = new Kit(); dk.box(seam, OW / 2, OH, 0.05, s * OW / 4, 0, 0, { r: 0.003 }); leafDetail(dk, M, s * OW / 4, OW / 2, OH, 0.05, 1); dk.box(M.brass, 0.01, OH - 0.1, 0.055, s * 0.005, 0.05, 0); dk.mesh(dg[s], {}); }
+  for (const s of [-1, 1]) { dg[s].position.set(0, 0, D0); const dk = new Kit(); dk.box(seam, OW / 2, OH, 0.05, s * OW / 4, 0, 0, { r: 0.003 }); leafDetail(dk, M, s * OW / 4, OW / 2, OH, 0.05, 1); dk.box(M.brass, 0.01, OH - 0.1, 0.055, s * 0.005, 0.05, 0); dk.mesh(dg[s], { occ: false }); }
   const cabLight = LightPool.add({ pos: new THREE.Vector3(XC, LEVEL_Y[1] + 2.4, ZD + 1.1), color: 0xfff0dc, intensity: 34, distance: 5.5, priority: 2, zone: 'elevator' });
 
   // ---------------- landings (frames, doors, indicators, call buttons) ----------------
@@ -126,7 +129,7 @@ export function buildElevator(scene, opts = {}) {
     const dm = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.21), disp.mat); dm.position.set(0, OH + 0.35, -0.065); dm.rotation.y = Math.PI; g.add(dm);
     const dmk = new Kit(); dmk.box(M.blackMetal, 0.48, 0.26, 0.03, 0, OH + 0.22, -0.045, { r: 0.006 }); dmk.mesh(g, {});
     const pg = { '-1': new THREE.Group(), '1': new THREE.Group() };
-    for (const s of [-1, 1]) { pg[s].position.set(0, 0, -0.02); g.add(pg[s]); const dk = new Kit(); dk.box(seam, OW / 2 - 0.004, OH, 0.045, s * OW / 4, 0, 0, { r: 0.003 }); leafDetail(dk, M, s * OW / 4, OW / 2 - 0.004, OH, 0.045, -1); dk.box(M.blackMetal, 0.006, OH - 0.1, 0.05, s * 0.004, 0.05, 0); dk.mesh(pg[s], {}); }
+    for (const s of [-1, 1]) { pg[s].position.set(0, 0, -0.02); g.add(pg[s]); const dk = new Kit(); dk.box(seam, OW / 2 - 0.004, OH, 0.045, s * OW / 4, 0, 0, { r: 0.003 }); leafDetail(dk, M, s * OW / 4, OW / 2 - 0.004, OH, 0.045, -1); dk.box(M.blackMetal, 0.006, OH - 0.1, 0.05, s * 0.004, 0.05, 0); dk.mesh(pg[s], { occ: false }); }
     const block = addCollider(XC - OW / 2, XC + OW / 2, ZD - 0.16, ZD + 0.08, y0, y0 + OH, L);
     const cabWalls = [
       addCollider(XC - HW - 0.06, XC - HW + 0.01, ZD + 0.05, ZD + D1 + 0.06, y0, y0 + H, L),
@@ -144,75 +147,18 @@ export function buildElevator(scene, opts = {}) {
   const setDisplays = (txt, arrow = 0) => { for (const d of [inDisp, ...landings.map((l) => l.disp)]) { d.text = txt; d.arrow = arrow; d.acc = 1; } };
   E.setDisplays = setDisplays;
 
-  E.call = (L) => {
-    if (E.busy) { G.game?.toast?.('The elevator is on its way.'); return; }
-    if (E.level === L) { E.openDoors = true; return; }
-    // summon: cab travels (invisibly) to this level
-    E.busy = true; E.openDoors = false;
-    const from = E.level;
-    G.audio?.ding?.();
-    G.game?.toast?.('Elevator arriving...');
-    E.remote = { t: 0, dur: 5.5, from, to: L };
-  };
-  E.ride = (to) => {
-    if (E.busy) return;
-    E.busy = true; E.openDoors = false;
-    G.player.lock++;
-    E.riding = { phase: 'closing', t: 0, from: E.level, to };
-    G.audio?.elevatorStart?.();
-  };
-  E.openDoors = true;
-
+  const updateMotion = E.update;
   E.update = (dt) => {
-    // door animation
-    const target = E.openDoors && !E.moving ? 1 : 0;
-    E.doors += (target - E.doors) * (1 - Math.exp(-dt * 4.2));
-    if (Math.abs(E.doors - target) < 0.004) E.doors = target;
-    const open = E.doors * (OW / 2 - 0.02);
-    for (const s of [-1, 1]) { dg[s].position.x = s * open * 0.98; }
-    landings.forEach((l, i) => { const o = E.level === i ? open : 0; for (const s of [-1, 1]) l.pg[s].position.x = s * o * 0.98; });
-
-    if (E.remote) {
-      const r = E.remote; r.t += dt;
-      const p = Math.min(1, r.t / r.dur);
-      const y = LEVEL_Y[r.from] + (LEVEL_Y[r.to] - LEVEL_Y[r.from]) * p;
-      const floorNum = r.to === 0 ? Math.max(1, Math.round(48 - p * 47)) : Math.max(1, Math.round(p * 47) + 1);
-      E.setDisplays(p > 0.98 ? (r.to === 0 ? 'L' : '48') : String(floorNum), r.to > r.from ? 1 : -1);
-      cab.position.y = y;
-      cabLight.pos.y = y + 2.4;
-      if (p >= 1) { E.remote = null; E.level = r.to; E.busy = false; E.openDoors = true; G.audio?.ding?.(); E.setDisplays(r.to === 0 ? 'L' : '48'); }
+    updateMotion(dt);
+    const open = E.doors * (OW / 2 + 0.02);
+    for (const side of [-1, 1]) dg[side].position.x = side * open;
+    for (const [i, landing] of landings.entries()) {
+      const present = E.level === i && !E.moving;
+      for (const side of [-1, 1]) landing.pg[side].position.x = side * (present ? open : 0);
+      landing.block.on = !(present && E.doors >= 0.95);
+      for (const collider of landing.cabWalls) collider.on = present;
     }
-    if (E.riding) {
-      const r = E.riding; r.t += dt;
-      const P = G.player;
-      if (r.phase === 'closing') {
-        E.openDoors = false;
-        if (r.t > 1.7) { r.phase = 'moving'; r.t = 0; E.moving = true; }
-      } else if (r.phase === 'moving') {
-        const dur = 10.5;
-        const p = Math.min(1, r.t / dur);
-        const e = p * p * p * (p * (p * 6 - 15) + 10);
-        const y = LEVEL_Y[r.from] + (LEVEL_Y[r.to] - LEVEL_Y[r.from]) * e;
-        cab.position.y = y; cabLight.pos.y = y + 2.4;
-        P.pos.y = y; P.eye = 1.68;
-        const rise = LEVEL_Y[r.to] > LEVEL_Y[r.from];
-        const floorNum = rise ? Math.min(48, Math.round(e * 47) + 1) : Math.max(1, 48 - Math.round(e * 47));
-        E.setDisplays(p > 0.985 ? (r.to === 0 ? 'L' : '48') : String(floorNum), rise ? 1 : -1);
-        G.elevProgress = p;
-        // subtle vibration
-        G.camera.position.y += Math.sin(r.t * 47) * 0.0012 * (1 - Math.abs(p - 0.5) * 1.6);
-        if (p >= 1) { r.phase = 'opening'; r.t = 0; E.moving = false; E.level = r.to; P.level = r.to; P.pos.y = LEVEL_Y[r.to]; E.setDisplays(r.to === 0 ? 'L' : '48'); G.audio?.ding?.(); G.audio?.elevatorStop?.(); }
-      } else if (r.phase === 'opening') {
-        E.openDoors = true;
-        if (r.t > 1.3) { E.riding = null; E.busy = false; P.lock = Math.max(0, P.lock - 1); }
-      }
-    }
-    // colliders
-    landings.forEach((l, i) => {
-      const present = E.level === i && !E.moving && !E.remote;
-      l.block.on = !(present && E.doors > 0.55);
-      for (const c of l.cabWalls) c.on = present;
-    });
   };
+  E.update(0);
   return E;
 }

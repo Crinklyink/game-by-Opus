@@ -11,6 +11,10 @@ export class InteriorProbe {
     this.r = renderer; this.scene = scene;
     this.rt = new THREE.WebGLCubeRenderTarget(size, { type: THREE.HalfFloatType, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
     this.cam = new THREE.CubeCamera(0.1, 900, this.rt);
+    // We render faces manually. r170 normally sets these orientations in
+    // CubeCamera.update(); without this, every face looks down the same axis.
+    this.cam.coordinateSystem = renderer.coordinateSystem;
+    this.cam.updateCoordinateSystem();
     this.cam.position.copy(pos);
     this.pos = pos.clone();
     this.pmrem = new THREE.PMREMGenerator(renderer);
@@ -36,22 +40,28 @@ export class InteriorProbe {
     if (!this.busy) return;
     const per = (force || this.first) ? 6 : 1;
     const r = this.r;
-    const prevTarget = r.getRenderTarget();
+    const prevTarget = r.getRenderTarget(), prevFace = r.getActiveCubeFace(), prevMip = r.getActiveMipmapLevel();
     const sm = r.shadowMap, au = sm.autoUpdate;
+    const mipmaps = this.rt.texture.generateMipmaps;
     sm.autoUpdate = false;
     this.cam.updateMatrixWorld();
-    for (let k = 0; k < per && this.face < 6; k++, this.face++) {
-      const c = this.cam.children[this.face];
-      c.layers.set(0);
-      r.setRenderTarget(this.rt, this.face);
-      r.render(this.scene, c);
+    try {
+      for (let k = 0; k < per && this.face < 6; k++, this.face++) {
+        const c = this.cam.children[this.face];
+        c.layers.set(0);
+        // Generate the pyramid once, after all six faces have been refreshed.
+        this.rt.texture.generateMipmaps = mipmaps && this.face === 5;
+        r.setRenderTarget(this.rt, this.face);
+        r.render(this.scene, c);
+      }
+    } finally {
+      this.rt.texture.generateMipmaps = mipmaps;
+      sm.autoUpdate = au;
+      r.setRenderTarget(prevTarget, prevFace, prevMip);
     }
-    sm.autoUpdate = au;
-    r.setRenderTarget(prevTarget);
     if (this.face >= 6) {
       this.busy = false; this.timer = 0; this.first = false;
-      const rt = this.pmrem.fromCubemap(this.rt.texture);
-      if (this.env) this.env.dispose();
+      const rt = this.pmrem.fromCubemap(this.rt.texture, this.env);
       this.env = rt;
       setInteriorEnv(rt.texture);
       this.gu.uProbeOn.value = 1;

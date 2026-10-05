@@ -21,7 +21,7 @@ fs.mkdirSync(path.dirname(out), { recursive: true });
 const browser = await launch();
 const page = await browser.newPage({ viewport: { width: +W, height: +H } });
 const logs = [];
-page.on('console', (m) => { const t = m.text(); if (m.type() === 'error' || m.type() === 'warning' || t.includes('[floor48]')) logs.push(`[${m.type()}] ${t}`); });
+page.on('console', (m) => { const t = m.text(); if (m.type() === 'error' || m.type() === 'warning' || t.includes('[larper48]')) logs.push(`[${m.type()}] ${t}`); });
 page.on('pageerror', (e) => logs.push('[pageerror] ' + e.message));
 const url = `http://localhost:${port}/index.html?test=1&w=${W}&h=${H}&${query}`;
 await page.goto(url);

@@ -1,15 +1,19 @@
 {
-  "name": "floor-48",
+  "name": "larper-48",
   "version": "1.0.0",
-  "description": "Floor 48 - a detailed 3D high-rise life sim (Three.js, WebGL2)",
+  "description": "Larper 48 - a detailed 3D high-rise life sim (Three.js, WebGL2)",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node serve.mjs",
     "build": "node build.mjs",
-    "app": "electron .",
-    "app:dev": "electron . --enable-logging",
-    "package": "node package.mjs"
+    "app": "node build.mjs && electron .",
+    "app:dev": "node build.mjs && electron . --enable-logging",
+    "package": "node package.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node tools/regression.mjs",
+    "test:save": "node tools/savetest.mjs",
+    "test:play": "node tools/playtest.mjs"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",
@@ -19,5 +23,5 @@
     "three": "0.170.0"
   },
   "main": "electron/main.cjs",
-  "productName": "Floor 48"
+  "productName": "Larper 48"
 }
