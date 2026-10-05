@@ -15,7 +15,8 @@ await page.goto(`http://localhost:${port}/index.html?test=1&w=960&h=540&q=low&hu
 await page.waitForFunction(() => window.__ready || window.__bootError, null, { timeout: 180000 });
 const ev = (f, a) => page.evaluate(f, a);
 const shot = async (n) => { await ev(() => window.__game.step(2, 0.05)); await page.screenshot({ path: `.scratch/pt_${n}.png`, timeout: 120000 }); };
-const step = async (msg, fn) => { try { await fn(); console.log('ok   ', msg); } catch (e) { console.log('FAIL ', msg, String(e.message).slice(0, 300)); } };
+let failures = 0;
+const step = async (msg, fn) => { try { await fn(); console.log('ok   ', msg); } catch (e) { failures++; console.log('FAIL ', msg, String(e.message).slice(0, 300)); } };
 fs.mkdirSync('.scratch', { recursive: true });
 
 await step('boot + hud', async () => { await ev(() => window.__game.step(3, 0.05)); await shot('01_hud'); });
@@ -23,7 +24,7 @@ await step('market panel', async () => { await ev(() => { window.__game.tp(-38.8
 await step('buy stock', async () => { const r = await ev(() => { const g = window.__game; g.G.time.hour = 11; g.step(1); g.game.trade('NXG', 5, 'buy'); return { cash: g.game.state.cash, pos: g.game.market.pos }; }); if (!r.pos.NXG || r.pos.NXG.shares !== 5) throw new Error('trade failed ' + JSON.stringify(r)); });
 await step('close panel', async () => { await ev(() => window.__game.ui.close(false)); });
 await step('elevator down', async () => {
-  await ev(() => { const g = window.__game; g.tp(-26, 165.7, 34.2, 0, 0, 1); g.simulate(4, 0.05); g.world.elevator.call(1); g.simulate(4, 0.05); });
+  await ev(() => { const g = window.__game; g.tp(-26, 165.7, 34.2, 0, 0, 1); g.simulate(4, 0.05); g.world.elevator.call(1); g.simulate(40, 0.05); });
   // walk into the cab
   await ev(() => { const g = window.__game; g.tp(-26, 165.7, 37.4, 3.14159, 0, 1); g.simulate(3, 0.05); g.world.elevator.ride(0); });
   const r = await ev(() => { const g = window.__game; for (let i = 0; i < 90; i++) g.simulate(1, 0.25); return { lvl: g.player.level, y: g.player.pos.y, busy: g.world.elevator.busy, ely: g.world.elevator.cab.position.y }; });
@@ -60,3 +61,4 @@ await step('settings panel', async () => { await ev(() => { window.__game.ui.clo
 await step('title screen', async () => { await ev(() => { const g = window.__game; g.ui.showTitle({ hasSave: true, onStart() {}, onContinue() {}, onSettings() {} }); g.ui.el.hud.classList.add('hidden'); g.step(1); }); await shot('08_title'); });
 console.log('--- console problems ---'); const seen = new Set(); for (const l of logs) { const k = l.slice(0, 120); if (seen.has(k)) continue; seen.add(k); console.log(l); }
 await browser.close(); server.close();
+process.exitCode = failures || logs.length ? 1 : 0;

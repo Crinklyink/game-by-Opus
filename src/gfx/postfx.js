@@ -201,10 +201,11 @@ void main(){
   vec2 cc = uv - 0.5;
   float r2 = dot(cc, cc);
   vec2 ca = cc * r2 * uCA;
-  vec3 col;
-  col.r = texture(tColor, uv + ca).r;
-  col.g = texture(tColor, uv).g;
-  col.b = texture(tColor, uv - ca).b;
+  vec3 col = texture(tColor, uv).rgb;
+  if (uCA > 0.0) {
+    col.r = texture(tColor, uv + ca).r;
+    col.b = texture(tColor, uv - ca).b;
+  }
   if (uSharp > 0.0) {
     vec3 n = texture(tColor, uv + vec2(uTexel.x,0.0)).rgb + texture(tColor, uv - vec2(uTexel.x,0.0)).rgb
            + texture(tColor, uv + vec2(0.0,uTexel.y)).rgb + texture(tColor, uv - vec2(0.0,uTexel.y)).rgb;
@@ -230,7 +231,7 @@ void main(){
   col *= mix(vec3(1.0), vec3(1.045, 1.0, 0.93), smoothstep(0.45, 0.95, tl));
   col *= 1.0 - uVig * smoothstep(0.32, 0.98, length(cc * vec2(1.25, 1.0)) * 1.55);
   col *= 1.0 - uFade;
-  col = toSRGB(col);
+  col = toSRGB(max(col, vec3(0.0)));
   col += (h21(gl_FragCoord.xy + fract(uTime) * 91.7) - 0.5) * (uGrain + 1.0/255.0);
   gl_FragColor = vec4(col, 1.0);
 }`;
@@ -239,7 +240,7 @@ export class PostFX {
   constructor(renderer, q) {
     this.r = renderer;
     this.quad = new FullScreenQuad(null);
-    this.fx = { fade: 0, sat: 1.08, vig: 0.26, grain: 0.018, ca: 0.0025, contrast: 0.26, warm: 0, bloom: 0.07, exposureBias: 1, aoAmt: 0.85, focus: 8, aperture: 1.0, rays: 0.22 };
+    this.fx = { fade: 0, sat: 1.02, vig: 0.14, grain: 0.006, ca: 0, contrast: 0.12, warm: 0, bloom: 0.055, exposureBias: 1, aoAmt: 0.85, focus: 8, aperture: 1.0, rays: 0.22 };
     this.size = new THREE.Vector2(1280, 720);
     this.focus = 8;
     this.first = true;
@@ -269,23 +270,30 @@ export class PostFX {
     this.mBlack = new THREE.MeshBasicMaterial({ color: 0x000000 });
   }
 
-  dispose() {
-    for (const k of ['rtScene', 'rtRefract', 'rtAO', 'rtAO2', 'rtA', 'rtLDR', 'rtE0', 'rtE1', 'rtRays']) if (this[k]) { this[k].dispose(); this[k] = null; }
+  dispose(keepExposure = false) {
+    const targets = ['rtScene', 'rtRefract', 'rtAO', 'rtAO2', 'rtA', 'rtLDR', 'rtRays'];
+    if (!keepExposure) targets.push('rtE0', 'rtE1');
+    for (const k of targets) if (this[k]) { this[k].dispose(); this[k] = null; }
     if (this.mips) this.mips.forEach((m) => m.dispose());
     this.mips = null;
   }
 
   setQuality(q, w = this.size.x, h = this.size.y) {
     this.q = q;
+    this.resizeKey = null;
     this.resize(w, h, this.scale ?? q.res);
   }
 
   // w,h = drawing-buffer size of the canvas, scale = internal resolution scale
   resize(w, h, scale) {
-    this.dispose();
-    this.canvasW = w; this.canvasH = h; this.scale = scale;
     const q = this.q;
     const iw = Math.max(64, Math.round(w * scale)), ih = Math.max(64, Math.round(h * scale));
+    const key = `${w}:${h}:${iw}:${ih}`;
+    this.scale = scale;
+    if (this.rtScene && this.resizeKey === key) return;
+    this.resizeKey = key;
+    this.dispose(true);
+    this.canvasW = w; this.canvasH = h;
     this.size.set(iw, ih);
     const HF = THREE.HalfFloatType;
     const base = { type: HF, format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false, stencilBuffer: false };
@@ -311,9 +319,11 @@ export class PostFX {
     if (q.dof) this.rtA = new THREE.WebGLRenderTarget(iw, ih, base);
     if (q.fxaa) this.rtLDR = new THREE.WebGLRenderTarget(w, h, { ...base, type: THREE.UnsignedByteType });
     const ex = { ...base, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter };
-    this.rtE0 = new THREE.WebGLRenderTarget(1, 1, ex);
-    this.rtE1 = new THREE.WebGLRenderTarget(1, 1, ex);
-    this.first = true;
+    if (!this.rtE0) {
+      this.rtE0 = new THREE.WebGLRenderTarget(1, 1, ex);
+      this.rtE1 = new THREE.WebGLRenderTarget(1, 1, ex);
+      this.first = true;
+    }
     G.u.uRes.value.set(iw, ih);
   }
 
@@ -343,9 +353,12 @@ export class PostFX {
       r.setRenderTarget(this.rtScene);
       r.autoClear = false;
       camera.layers.set(LAYER_GLASS);
-      r.render(scene, camera);
-      camera.layers.set(0);
-      r.autoClear = true;
+      // Reuse the opaque pass's shadows. Rendering only the glass layer must
+      // not rebuild an empty shadow map or pay for a second shadow pass.
+      const updateShadows = r.shadowMap.autoUpdate;
+      r.shadowMap.autoUpdate = false;
+      try { r.render(scene, camera); }
+      finally { r.shadowMap.autoUpdate = updateShadows; camera.layers.set(0); r.autoClear = prevAuto; }
     }
     r.autoClear = prevAuto;
     camera.updateMatrixWorld();

@@ -21,5 +21,5 @@ const server = http.createServer((req, res) => {
   });
 });
 server.listen(port, () => {
-  console.log(`\n  Floor 48 is running:  http://localhost:${port}\n  (press Ctrl+C to stop)\n`);
+  console.log(`\n  Larper 48 is running:  http://localhost:${port}\n  (press Ctrl+C to stop)\n`);
 });

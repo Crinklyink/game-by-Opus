@@ -11,15 +11,15 @@ WebGL2 shaders (three.js).
 
 ```
 npm install        # once
-npm run package    # builds release/Floor48-win32-x64/Floor48.exe  (a standalone app, no browser needed)
+npm run package    # builds release/Larper48-win32-x64/Larper48.exe  (a standalone app, no browser needed)
 ```
-Then run `Floor48.exe` (or just double-click `play-app.bat`, which builds it the first time). `npm run app` runs it straight from source.
+Then run `Larper48.exe` (or just double-click `play-app.bat`, which builds it the first time). `npm run app` runs it straight from source.
 The app is a stripped-down Chromium window with every GPU path forced on (GPU blocklist ignored, ANGLE/D3D11, GPU rasterisation,
 discrete-GPU preference, no background throttling). **F11** or **Alt+Enter** toggles fullscreen.
 
 ## Play in a browser
 
-**Double-click `dist/floor48.html`** (Chrome or Edge). It's one self-contained file. Or from source:
+**Double-click `dist/larper48.html`** (Chrome or Edge). It's one self-contained file. Or from source:
 
 ```
 node serve.mjs          # then open http://localhost:8080
@@ -81,8 +81,40 @@ If you have a laptop with two GPUs and it looks slow: make sure the browser is s
 
 ```
 npm install      # once (esbuild + three)
-npm run build    # writes dist/floor48.html
+npm run build    # writes dist/larper48.html
 ```
 
 `vendor/three` holds a pinned copy of three.js r170 so the game works offline.
 `tools/` has the headless screenshot harness and a scripted playtest used during development.
+
+## Upgrading from Floor 48
+
+The desktop app keeps its original `Floor 48` data directory and existing save/settings keys.
+Do not delete that directory when upgrading. The executable and app identity are now Larper 48.
+
+For a browser save made by opening `dist/floor48.html`, update the game **in the same folder** and
+open that same file once. It is a compatibility copy of the new Larper 48 game, not a redirect.
+Use **Settings -> Export save**, then open `dist/larper48.html` in the desired browser and use
+**Settings -> Import save**. This transfers both progress and settings and retains a recovery copy
+if you replace an existing save. Keep the exported JSON until you have checked Continue.
+Browser storage belongs to the browser profile and URL; moving or renaming a file, changing
+localhost ports, or switching browsers does not automatically transfer it.
+
+New automation options use `L48_` (`PAGE`, `QUERY`, `DEVTOOLS`, `FULLSCREEN`, `LOGGPU`,
+`UNCAPPED`, `PLATFORM`, `ARCH`). Existing `F48_` options remain fallback aliases.
+
+## Verification
+
+```
+npm ci
+npm run build
+npm test                  # storage, identity, elevator, collision and rendering regressions
+npx playwright-core install chromium
+npm run test:browser      # bundled game, legacy saves, elevator camera, rendered scenes
+npm run test:save         # source save/load round trip
+npm run test:play         # source shops, movement, elevator, cooking, sleep and UI
+```
+
+On machines without a hardware GPU, set `SOFT=1`. `BROWSER_PATH` can point to an installed
+Chrome/Chromium executable. Software-renderer timings are not a measure of gaming performance.
+See [the rename and compatibility audit](docs/RENAME_AUDIT.md) for exact changes and remaining checks.

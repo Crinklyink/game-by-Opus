@@ -252,6 +252,7 @@ export function openSettings(game, fromTitle = false) {
       <span>Quality preset</span><select id="s-q">${['auto', 'low', 'medium', 'high', 'ultra'].map((k) => `<option value="${k}" ${st.quality === k ? 'selected' : ''}>${k === 'auto' ? `Auto (${G.gpu?.auto || G.gpu?.tier})` : k[0].toUpperCase() + k.slice(1)}</option>`).join('')}</select>
       <span>Render resolution <b id="v-res">${Math.round(st.res * 100)}%</b></span><input type="range" id="s-res" min="50" max="100" value="${Math.round(st.res * 100)}">
       <span>Dynamic resolution</span><select id="s-dyn"><option value="1" ${st.dyn ? 'selected' : ''}>On (keeps 60 fps)</option><option value="0" ${!st.dyn ? 'selected' : ''}>Off</option></select>
+      <span>Depth of field</span><select id="s-dof"><option value="0" ${!st.depthOfField ? 'selected' : ''}>Off (clear view)</option><option value="1" ${st.depthOfField ? 'selected' : ''}>On (High / Ultra)</option></select>
       <span>Field of view <b id="v-fov">${st.fov}°</b></span><input type="range" id="s-fov" min="60" max="100" value="${st.fov}">
       <span>Show FPS overlay</span><select id="s-fps"><option value="0" ${!st.fps ? 'selected' : ''}>Off</option><option value="1" ${st.fps ? 'selected' : ''}>On</option></select>
     </div>
@@ -264,6 +265,9 @@ export function openSettings(game, fromTitle = false) {
       <span>Effects</span><input type="range" id="s-vs" min="0" max="100" value="${Math.round(st.vSfx * 100)}">
       <span>Ambience</span><input type="range" id="s-va" min="0" max="100" value="${Math.round(st.vAmb * 100)}">
     </div>
+    <h3>Save backup</h3>
+    <div class="row"><button class="btn" id="s-export">Export save</button><button class="btn" id="s-import">Import save</button><input type="file" id="s-backup" accept=".json,application/json" hidden></div>
+    <div class="sub">Move your saved game and settings between files or browsers.</div>
     <h3>World</h3>
     <div class="grid" style="grid-template-columns:200px 1fr;align-items:center;gap:10px 16px">
       <span>Time speed</span><select id="s-ts"><option value="1" ${st.timeSpeed === 1 ? 'selected' : ''}>Relaxed (1 game minute / second)</option><option value="2" ${st.timeSpeed === 2 ? 'selected' : ''}>Normal (2 min / second)</option><option value="4" ${st.timeSpeed === 4 ? 'selected' : ''}>Fast (4 min / second)</option></select>
@@ -273,10 +277,14 @@ export function openSettings(game, fromTitle = false) {
     <div class="row" style="margin-top:20px"><div class="grow"></div><button class="btn pri" data-x="ok">Done</button></div>`,
     { onMount: (p) => {
       const $ = (s) => p.querySelector(s);
+      $('#s-export').onclick = () => game.exportSave();
+      $('#s-import').onclick = () => $('#s-backup').click();
+      $('#s-backup').onchange = (e) => game.importSave(e.target.files[0]);
       $('#s-wx').value = game.weatherMode || 'auto';
       $('#s-q').addEventListener('change', (e) => { st.quality = e.target.value; game.saveSettings(); game.applyQualityRestart(); });
       $('#s-res').addEventListener('input', (e) => { st.res = e.target.value / 100; $('#v-res').textContent = e.target.value + '%'; game.applySettings(); });
       $('#s-dyn').addEventListener('change', (e) => { st.dyn = e.target.value === '1'; game.applySettings(); });
+      $('#s-dof').addEventListener('change', (e) => { st.depthOfField = e.target.value === '1'; game.applySettings(); });
       $('#s-fov').addEventListener('input', (e) => { st.fov = +e.target.value; $('#v-fov').textContent = st.fov + '°'; game.applySettings(); });
       $('#s-fps').addEventListener('change', (e) => { st.fps = e.target.value === '1'; game.applySettings(); });
       $('#s-sens').addEventListener('input', (e) => { st.sens = e.target.value / 10; $('#v-sens').textContent = st.sens.toFixed(1); game.applySettings(); });

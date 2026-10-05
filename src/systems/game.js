@@ -8,10 +8,11 @@ import { zoneAt } from './zones.js';
 import * as P from '../ui/panels.js';
 import { APT_Y } from '../world/consts.js';
 
-const SAVE_KEY = 'floor48.save.v1', SET_KEY = 'floor48.settings';
+import { SAVE_KEY, SETTINGS_KEY as SET_KEY, CONTINUE_KEY, exportBackup, importBackup } from './storage.js';
+import { safeElevatorPosition, inCab } from '../world/elevator-motion.js';
 const WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-export const defaultSettings = () => ({ quality: 'auto', res: 1, dyn: true, fov: 74, fps: false, sens: 1, vMaster: 0.85, vMusic: 0.55, vSfx: 0.9, vAmb: 0.85, timeSpeed: 2 });
+export const defaultSettings = () => ({ quality: 'auto', depthOfField: false, res: 1, dyn: true, fov: 74, fps: false, sens: 1, vMaster: 0.85, vMusic: 0.55, vSfx: 0.9, vAmb: 0.85, timeSpeed: 2 });
 export function loadSettings() { try { return { ...defaultSettings(), ...JSON.parse(localStorage.getItem(SET_KEY) || '{}') }; } catch (e) { return defaultSettings(); } }
 
 const defaultState = () => ({
@@ -40,11 +41,12 @@ export class Game {
   save(verbose = false) {
     try {
       const S = this.state, P_ = this.player;
-      const data = { state: S, market: this.market.serialize(), hour: G.time.hour, day: S.day, pos: { x: P_.pos.x, y: P_.pos.y, z: P_.pos.z, yaw: P_.yaw, level: P_.level }, lights: Object.fromEntries(Object.entries(this.world.apt.groups).map(([k, g]) => [k, g.on])), ts: Date.now() };
+      const data = { state: S, market: this.market.serialize(), hour: G.time.hour, day: S.day, pos: safeElevatorPosition({ x: P_.pos.x, y: P_.pos.y, z: P_.pos.z, yaw: P_.yaw, level: P_.level }), elevator: { level: this.world.elevator.level }, lights: Object.fromEntries(Object.entries(this.world.apt.groups).map(([k, g]) => [k, g.on])), ts: Date.now() };
       data.goals = this.ui.goalsDone;
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
       if (verbose) this.toast('Game saved.');
-    } catch (e) { if (verbose) this.toast('Could not save (storage unavailable).'); }
+      return true;
+    } catch (e) { if (verbose) this.toast('Could not save (storage unavailable).'); return false; }
   }
   load() {
     try {
@@ -56,11 +58,14 @@ export class Game {
       this.ui.goalsDone = d.goals || {}; this.ui.renderGoals();
       if (d.lights) for (const [k, v] of Object.entries(d.lights)) this.world.apt.groups[k]?.set(v);
       this.applyUpgrades();
-      if (d.pos) { this.player.teleport(d.pos.x, d.pos.y, d.pos.z, d.pos.yaw, d.pos.level); }
+      const pos = d.pos && safeElevatorPosition(d.pos);
+      this.world.elevator.reset(pos && inCab(pos) ? pos.level : (d.elevator?.level ?? 1));
+      if (pos) this.player.teleport(pos.x, pos.y, pos.z, pos.yaw, pos.level);
       return true;
     } catch (e) { console.warn('load failed', e); return false; }
   }
   newGame() {
+    this.world.elevator.reset(1);
     this.state = defaultState();
     this.market = new Market(); G.market = this.market;
     G.time.hour = 7.5; G.time.day = 1;
@@ -82,7 +87,30 @@ export class Game {
     this.ui.perf(s.fps ? ' ' : '');
     this.saveSettings();
   }
-  applyQualityRestart() { this.save(false); try { sessionStorage.setItem('floor48.continue', '1'); } catch (e) { /* ignore */ } location.reload(); }
+  applyQualityRestart() {
+    // Settings are also reachable from the title. Never overwrite an existing save with the idle demo state.
+    if (this.ui.started && !this.save(true)) return;
+    try { if (this.ui.started) sessionStorage.setItem(CONTINUE_KEY, '1'); } catch { /* ignore */ }
+    location.reload();
+  }
+  exportSave() {
+    if (this.ui.started && !this.save(true)) return;
+    try {
+      if (!this.hasSave()) { this.toast('No saved game to export yet.'); return; }
+      const url = URL.createObjectURL(new Blob([exportBackup(localStorage)], { type: 'application/json' }));
+      const a = document.createElement('a'); a.href = url; a.download = 'Larper48-save.json'; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch { this.toast('Could not export the saved game.'); }
+  }
+  async importSave(file) {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { this.toast('That backup is too large.'); return; }
+    if (this.hasSave() && !confirm('Replace the current save with this backup? A recovery copy of the current save will be kept.')) return;
+    try { importBackup(await file.text(), localStorage); }
+    catch { this.toast('Could not import: invalid backup or storage unavailable.'); return; }
+    try { sessionStorage.setItem(CONTINUE_KEY, '1'); } catch { /* Continue remains available on title */ }
+    location.reload();
+  }
   setWeatherMode(m) { this.weatherMode = m; this.world.weatherSys.force(m); }
   setTimeOfDay(h) { G.time.hour = h; }
 
@@ -120,7 +148,7 @@ export class Game {
     this.zone = zoneAt(p.x, p.y, p.z, this.player.level, this.world.shops);
     G.indoor = this.zone.indoor && this.zone.name !== 'apartment' || (this.zone.name === 'apartment');
     // ---- passing out ----
-    if (S.energy <= 0.5 && !this.busy && !this.ui.modalOpen) this.passOut();
+    if (S.energy <= 0.5 && !this.busy && !this.world.elevator.busy && !this.ui.modalOpen) this.passOut();
     // ---- alerts ----
     if (S.hunger < 20 && !this.needsAlert.hungry) { this.needsAlert.hungry = true; this.toast('Your stomach is growling. Time to eat.'); this.audio.growl?.(); }
     if (S.hunger > 30) this.needsAlert.hungry = false;
@@ -130,8 +158,8 @@ export class Game {
     const fx = this.post.fx;
     const hungry = 1 - smooth(6, 30, S.hunger), tired = 1 - smooth(6, 30, S.energy);
     const t = Math.min(1, dt * 2);
-    fx.sat = lerp(fx.sat, 1.08 - hungry * 0.32 - tired * 0.15, t);
-    fx.vig = lerp(fx.vig, 0.26 + tired * 0.32 + hungry * 0.08, t);
+    fx.sat = lerp(fx.sat, 1.02 - hungry * 0.32 - tired * 0.15, t);
+    fx.vig = lerp(fx.vig, 0.14 + tired * 0.32 + hungry * 0.08, t);
     // ---- HUD (4 Hz) ----
     this.hudAcc += dt;
     if (this.hudAcc > 0.25) {

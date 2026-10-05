@@ -32,6 +32,7 @@ import { updateScreens } from './world/screens.js';
 import { Kit, addCollider } from './world/kit.js';
 import { APT_Y, CEIL_H } from './world/consts.js';
 import { Player } from './systems/player.js';
+import { CONTINUE_KEY } from './systems/storage.js';
 import { Game, loadSettings } from './systems/game.js';
 import { zoneAt } from './systems/zones.js';
 import { GameAudio } from './audio/audio.js';
@@ -41,7 +42,7 @@ import { showPause, openSettings } from './ui/panels.js';
 const params = new URLSearchParams(location.search);
 const TEST = params.has('test');
 const canvas = document.getElementById('gl');
-const log = (...a) => console.log('[floor48]', ...a);
+const log = (...a) => console.log('[larper48]', ...a);
 
 async function boot() {
   const ui = new UI(document.getElementById('ui'));
@@ -62,7 +63,7 @@ async function boot() {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, stencil: false, powerPreference: 'high-performance', preserveDrawingBuffer: TEST });
   // if a driver rejects one of the custom shaders, keep going and tell the player how to recover instead of failing silently
   let shaderErrors = 0;
-  renderer.debug.onShaderError = (gl, program) => { shaderErrors++; console.error('[floor48] shader failed to compile:', (gl.getProgramInfoLog(program) || '').slice(0, 600)); };
+  renderer.debug.onShaderError = (gl, program) => { shaderErrors++; console.error('[larper48] shader failed to compile:', (gl.getProgramInfoLog(program) || '').slice(0, 600)); };
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.NoToneMapping;
@@ -200,7 +201,8 @@ async function boot() {
     elapsed += dt; frames++;
     renderer.info.reset();
     G.u.uTime.value = elapsed;
-    if (started) { game.update(dt); player.update(dt); } else { setTitleCam(dt); G.time.hour = (G.time.hour + dt * 0.012) % 24; }
+    world.elevator.update(game.paused ? 0 : dt);
+    if (started) { player.update(dt); game.update(dt); } else { setTitleCam(dt); G.time.hour = (G.time.hour + dt * 0.012) % 24; }
     camera.updateProjectionMatrix();
     focus.copy(camera.position);
     atmo.shadowExtent = camera.position.y > 100 ? Math.min(30, q.shadowExtent) : q.shadowExtent;
@@ -212,7 +214,6 @@ async function boot() {
     world.people.update(dt, camera.position);
     world.traffic.update(dt, camera.position);
     world.apt.update(dt, elapsed);
-    world.elevator.update(dt);
     world.lobby.update(dt);
     world.shops.grocery.update(dt);
     world.exteriors.update(dt);
@@ -245,7 +246,7 @@ async function boot() {
     planar.update(scene, camera, streetMod.ROAD_Y, camera.position.y < 40 && G.u.uWet.value > 0.03 && (!game.zone || !game.zone.indoor));
     const zn0 = game.zone ? game.zone.name : 'apartment';
     const expKey = 0.2 * (1 - ((zn0 === 'street' || zn0 === 'park') ? 0.5 : 0.45) * atmo.night);      // nights stay dark instead of being normalised to daylight
-    post.render(scene, camera, dt, elapsed, { glass: true, expMin: 0.24, expKey, dof: !modal, dofScale: 0.8 });
+    post.render(scene, camera, dt, elapsed, { glass: true, expMin: 0.24, expKey, dof: !modal && game.settings.depthOfField, dofScale: 0.8 });
     // dynamic resolution + fps overlay
     fpsAcc += dt; fpsN++;
     if (fpsAcc >= 0.5) {
@@ -263,7 +264,7 @@ async function boot() {
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     requestAnimationFrame(frame);
-    try { tick(dt); } catch (e) { if (!frame.warned) { frame.warned = true; console.error('[floor48] frame error', e); } }
+    try { tick(dt); } catch (e) { if (!frame.warned) { frame.warned = true; console.error('[larper48] frame error', e); } }
   }
 
   // ---------------------------------------------------------------- start / title
@@ -320,7 +321,7 @@ async function boot() {
       onContinue: () => startGame({ fresh: false }),
       onSettings: () => openSettings(game, true),
     });
-    let auto = false; try { auto = sessionStorage.getItem('floor48.continue') === '1'; sessionStorage.removeItem('floor48.continue'); } catch (e) { /* ignore */ }
+    let auto = false; try { auto = sessionStorage.getItem(CONTINUE_KEY) === '1'; sessionStorage.removeItem(CONTINUE_KEY); } catch (e) { /* ignore */ }
     if (auto && game.hasSave()) startGame({ fresh: false, lock: false });
   }
   log('ready');

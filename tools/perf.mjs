@@ -9,7 +9,7 @@ const server = http.createServer((req, res) => { const p = decodeURIComponent(ne
 await new Promise((r) => server.listen(0, r));
 const browser = await launch();
 const page = await browser.newPage({ viewport: { width: +W, height: +H } });
-const logs = []; page.on('console', (m) => { if (m.type() === 'error' || m.text().includes('[floor48] GPU')) logs.push(m.text().slice(0, 300)); }); page.on('pageerror', (e) => logs.push('pageerror ' + e.message));
+const logs = []; page.on('console', (m) => { if (m.type() === 'error' || m.text().includes('[larper48] GPU')) logs.push(m.text().slice(0, 300)); }); page.on('pageerror', (e) => logs.push('pageerror ' + e.message));
 await page.goto(`http://localhost:${server.address().port}/index.html?test=1&${query}`);
 await page.waitForFunction(() => window.__ready || window.__bootError, null, { timeout: 240000 });
 const spots = [

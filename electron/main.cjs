@@ -1,7 +1,11 @@
-// Floor 48 desktop shell: a bare Chromium window with every GPU path switched on and no browser chrome,
+// Larper 48 desktop shell: a bare Chromium window with every GPU path switched on and no browser chrome,
 // extensions, tab throttling or blocklist getting in the way of the WebGL2 renderer.
 const { app, BrowserWindow, Menu, session, shell, dialog } = require('electron');
 const path = require('node:path');
+const { configureIdentity, option } = require('./identity.cjs');
+
+// Must run before the single-instance lock, ready event, or any Session access.
+configureIdentity(app);
 
 const sw = app.commandLine.appendSwitch.bind(app.commandLine);
 // ---- GPU: use the real (discrete) GPU through ANGLE/D3D11 and keep everything on it
@@ -18,10 +22,9 @@ sw('disable-background-timer-throttling');
 sw('disable-backgrounding-occluded-windows');
 sw('autoplay-policy', 'no-user-gesture-required');   // audio engine starts without a gesture on reload / continue
 sw('disable-features', 'CalculateNativeWinOcclusion,HardwareMediaKeyHandling,MediaSessionService');
-if (process.env.F48_UNCAPPED === '1') { sw('disable-gpu-vsync'); sw('disable-frame-rate-limit'); }   // benchmarking only
+if (option('UNCAPPED') === '1') { sw('disable-gpu-vsync'); sw('disable-frame-rate-limit'); }   // benchmarking only
 
 app.disableDomainReliabilityReporting?.();
-app.setAppUserModelId('com.floor48.game');
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 
 let win = null;
@@ -29,13 +32,13 @@ function createWindow() {
   Menu.setApplicationMenu(null);
   win = new BrowserWindow({
     width: 1600, height: 900, minWidth: 960, minHeight: 540, show: false, backgroundColor: '#05070b',
-    title: 'Floor 48', autoHideMenuBar: true, fullscreenable: true,
+    title: 'Larper 48', autoHideMenuBar: true, fullscreenable: true,
     webPreferences: {
       contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false, webgl: true,
-      v8CacheOptions: 'bypassHeatCheck', spellcheck: false, enableWebSQL: false, devTools: !app.isPackaged || process.env.F48_DEVTOOLS === '1',
+      v8CacheOptions: 'bypassHeatCheck', spellcheck: false, enableWebSQL: false, devTools: !app.isPackaged || option('DEVTOOLS') === '1',
     },
   });
-  win.once('ready-to-show', () => { win.maximize(); win.show(); if (process.env.F48_FULLSCREEN === '1') win.setFullScreen(true); });
+  win.once('ready-to-show', () => { win.maximize(); win.show(); if (option('FULLSCREEN') === '1') win.setFullScreen(true); });
   win.webContents.on('before-input-event', (e, input) => {
     if (input.type !== 'keyDown') return;
     if (input.key === 'F11' || (input.alt && input.key === 'Enter')) { win.setFullScreen(!win.isFullScreen()); e.preventDefault(); }
@@ -43,9 +46,9 @@ function createWindow() {
   });
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file:')) e.preventDefault(); });
-  win.webContents.on('render-process-gone', (_e, d) => { dialog.showErrorBox('Floor 48', `The renderer stopped (${d.reason}). Restart the game; if it keeps happening update your GPU driver.`); });
-  const file = process.env.F48_PAGE ? path.resolve(process.env.F48_PAGE) : path.join(__dirname, '..', 'dist', 'floor48.html');
-  win.loadFile(file, { search: process.env.F48_QUERY || '' });
+  win.webContents.on('render-process-gone', (_e, d) => { dialog.showErrorBox('Larper 48', `The renderer stopped (${d.reason}). Restart the game; if it keeps happening update your GPU driver.`); });
+  const file = option('PAGE') ? path.resolve(option('PAGE')) : path.join(__dirname, '..', 'dist', 'larper48.html');
+  win.loadFile(file, { search: option('QUERY') || '' });
 }
 
 app.whenReady().then(() => {
@@ -56,4 +59,4 @@ app.whenReady().then(() => {
 });
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
 app.on('window-all-closed', () => app.quit());
-app.on('gpu-info-update', () => { if (process.env.F48_LOGGPU === '1') console.log('[gpu]', JSON.stringify(app.getGPUFeatureStatus())); });
+app.on('gpu-info-update', () => { if (option('LOGGPU') === '1') console.log('[gpu]', JSON.stringify(app.getGPUFeatureStatus())); });

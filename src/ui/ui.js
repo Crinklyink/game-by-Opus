@@ -29,7 +29,7 @@ export class UI {
       <div id="modal"></div>
       <div id="fade"><div class="msg"></div></div>
       <div id="title" class="gone"></div>
-      <div id="loading"><h2>Floor 48</h2><div class="lbar"><b></b></div><p>Building the city...</p></div>`;
+      <div id="loading"><h2>Larper 48</h2><div class="lbar"><b></b></div><p>Building the city...</p></div>`;
     this.el = {
       hud: root.querySelector('#hud'), cross: root.querySelector('#cross'), prompt: root.querySelector('#prompt'), promptTxt: root.querySelector('#prompt span'),
       clock: root.querySelector('#clock'), dayline: root.querySelector('#dayline'), loc: root.querySelector('#loc'),
@@ -40,8 +40,8 @@ export class UI {
     };
     this.el.modal.addEventListener('mousedown', (e) => { if (e.target === this.el.modal && this.closable && this.onBackdrop) this.close(); });
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Escape' && this.modalOpen && this.closable) { this.close(); e.preventDefault(); }
-      if (e.code === 'Escape' && !this.modalOpen && this.started && !this.paused && G.player?.dragLook) this.showPause();
+      if (e.code === 'Escape' && this.modalOpen && this.closable) { this.close(); e.preventDefault(); return; }
+      if (e.code === 'Escape' && !this.modalOpen && this.started && !this.paused && G.player?.dragLook) this.onLockLost?.();
     });
     this.lastPrompt = null;
     this.goalsDone = {};
@@ -56,7 +56,7 @@ export class UI {
   showTitle({ hasSave, onStart, onContinue, onSettings }) {
     const t = this.el.title; t.classList.remove('gone');
     t.innerHTML = `
-      <h1>FLOOR <span>48</span></h1>
+      <h1>LARPER <span>48</span></h1>
       <div class="tag">a quiet life above the city</div>
       <div class="menu">
         ${hasSave ? '<button class="btn pri" data-a="cont">Continue</button><button class="btn" data-a="new">New game</button>' : '<button class="btn pri" data-a="new">Start</button>'}

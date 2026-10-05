@@ -32,7 +32,7 @@ export class Player {
 
   _bind() {
     const kd = (e) => {
-      if (e.repeat && e.code !== 'KeyE') { /* ignore repeats except for E */ }
+      if (e.repeat) return; // held keys remain set; do not repeat toggles / interactions
       this.keys[e.code] = true;
       if (G.ui && G.ui.modalOpen) return;
       if (e.code === 'KeyE' || e.code === 'Enter') this.interact();
@@ -161,12 +161,13 @@ export class Player {
       const accel = len > 0 ? 14 : 10;
       this.vel.x = damp(this.vel.x, wx * speed, accel, dt);
       this.vel.z = damp(this.vel.z, wz * speed, accel, dt);
-      let nx = this.pos.x + this.vel.x * dt, nz = this.pos.z + this.vel.z * dt;
-      // resolve X then Z separately so we slide along walls
-      let [rx, rz] = this.collide(nx, this.pos.z);
-      this.pos.x = rx;
-      [rx, rz] = this.collide(this.pos.x, nz);
-      this.pos.z = rz;
+      // Substeps keep sprinting / long frames from tunnelling through thin doors.
+      const distance = Math.hypot(this.vel.x, this.vel.z) * dt;
+      const steps = Math.max(1, Math.ceil(distance / (this.radius * 0.5)));
+      for (let i = 0; i < steps; i++) {
+        this.pos.x = this.collide(this.pos.x + this.vel.x * dt / steps, this.pos.z)[0];
+        this.pos.z = this.collide(this.pos.x, this.pos.z + this.vel.z * dt / steps)[1];
+      }
       const sp = Math.hypot(this.vel.x, this.vel.z);
       this.moving = sp / 5.2;
       this.bob += sp * dt * 1.9;
@@ -183,7 +184,7 @@ export class Player {
       // locked or in a modal: keep the camera where it is, but hold the vertical eye position
       this.vel.multiplyScalar(0.8);
       this.camPos.set(this.pos.x, this.pos.y + this.eye, this.pos.z);
-      if (this.lock > 0) this.pos.y = damp(this.pos.y, this.groundY(this.pos.x, this.pos.z), 22, dt);
+      // A moving platform owns height while controls are locked. Never pull the rider toward a landing.
     }
 
     cam.position.copy(this.camPos);

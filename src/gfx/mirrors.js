@@ -88,7 +88,7 @@ export class MirrorSystem {
     const w = asp >= 1 ? long : Math.max(128, Math.round(long * asp)), h = asp >= 1 ? Math.max(128, Math.round(long / asp)) : long;
     if (m.rt && m.rt.width === w && m.rt.height === h) return;
     if (m.rt) m.rt.dispose();
-    m.rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true, samples: this.scale >= 0.8 ? 4 : 0, generateMipmaps: false });   // MSAA: mirrors are seen up close
+    m.rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true, samples: this.scale >= 0.8 ? Math.min(4, this.q.msaa || 0) : 0, generateMipmaps: false });
     m.mat.uniforms.tMirror.value = m.rt.texture;
     m.mat.uniforms.uTexel.value.set(1 / w, 1 / h);
   }
@@ -119,18 +119,22 @@ export class MirrorSystem {
     const todo = cands.slice(0, this.max);
     if (!todo.length) return;
     const r = this.r;
-    const prevRT = r.getRenderTarget(), au = r.shadowMap.autoUpdate, prevLayers = camera.layers.mask;
+    const prevRT = r.getRenderTarget(), au = r.shadowMap.autoUpdate;
     r.shadowMap.autoUpdate = false;
     // mirrors must not appear in their own reflection (feedback) - hide every mirror quad while capturing
-    for (const m of this.list) for (const me of m.meshes) me.visible = false;
-    for (const { m, wc, wn } of todo) {
-      this._ensureRT(m);
-      this._capture(scene, camera, m, wc, wn);
-      m.mat.uniforms.uOn.value = 1; this.rendered++;
+    const visibility = this.list.flatMap((m) => m.meshes.map((mesh) => [mesh, mesh.visible]));
+    for (const [mesh] of visibility) mesh.visible = false;
+    try {
+      for (const { m, wc, wn } of todo) {
+        this._ensureRT(m);
+        this._capture(scene, camera, m, wc, wn);
+        m.mat.uniforms.uOn.value = 1; this.rendered++;
+      }
+    } finally {
+      for (const [mesh, visible] of visibility) mesh.visible = visible;
+      r.setRenderTarget(prevRT);
+      r.shadowMap.autoUpdate = au;
     }
-    for (const m of this.list) for (const me of m.meshes) me.visible = true;
-    r.setRenderTarget(prevRT);
-    r.shadowMap.autoUpdate = au;
   }
 
   _capture(scene, camera, m, wc, wn) {
@@ -159,6 +163,7 @@ export class MirrorSystem {
     q.w = (1.0 + pm.elements[10]) / pm.elements[14];
     clip.multiplyScalar(2.0 / clip.dot(q));
     pm.elements[2] = clip.x; pm.elements[6] = clip.y; pm.elements[10] = clip.z + 1.0 - 0.003; pm.elements[14] = clip.w;
+    cam.projectionMatrixInverse.copy(pm).invert();
     const r = this.r;
     r.setRenderTarget(m.rt);
     r.clear();

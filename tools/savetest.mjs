@@ -19,4 +19,4 @@ const after = await page.evaluate(() => { const g = window.__game; const S = g.g
 console.log('after ', JSON.stringify(after));
 const ok = after.cash === before.cash && after.shares === before.shares && Math.abs(after.hunger - before.hunger) < 3 && JSON.stringify(after.pantry) === JSON.stringify(before.pantry) && Math.abs(after.pos[0] - before.pos[0]) < 0.3 && Math.abs(after.pos[2] - before.pos[2]) < 0.3;
 console.log(ok ? 'SAVE/LOAD OK' : 'SAVE/LOAD MISMATCH'); if (logs.length) console.log('console errors:', logs.join('\n'));
-await browser.close(); server.close(); process.exit(ok ? 0 : 1);
+await browser.close(); server.close(); process.exit(ok && !logs.length ? 0 : 1);
